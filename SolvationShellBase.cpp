@@ -45,6 +45,7 @@ void SolvationShellBase::registerKeywords( Keywords& keys ){
   keys.add("atoms","GROUPA","First list of atoms");
   keys.add("atoms","GROUPB","Second list of atoms (if empty, N*(N-1)/2 pairs in GROUPA are counted)");
   keys.add("atoms","GROUPC","Third list of atoms (if empty, N*(N-1)/2 pairs in GROUPA are counted)");
+  keys.add("atoms","GROUPD","Fourth list of atoms (if empty, N*(N-1)/2 pairs in GROUPA are counted)");
 //  keys.add("compulsory","NN_n","6","The n parameter of the switching function ");
 //  keys.add("compulsory","MM_n","0","The m parameter of the switching function; 0 implies 2*NN");
 //  keys.add("compulsory","NN_m","6","The n parameter of the switching function ");
@@ -72,10 +73,12 @@ firsttime(true)
   parseAtomList("GROUPA",ga_lista);
   parseAtomList("GROUPB",gb_lista);
   parseAtomList("GROUPC",gc_lista);
+  parseAtomList("GROUPD",gd_lista);
 
   list_a = ga_lista;
   list_b = gb_lista;
   list_c = gc_lista;
+  list_d = gd_lista;
 
   bool nopbc=!pbc;
   parseFlag("NOPBC",nopbc);
@@ -106,6 +109,7 @@ firsttime(true)
    if(nl_st<=0) error("NL_STRIDE should be explicitly specified and positive");
   }
   
+  //TODO: add neighbor list for gc_lista
   addValueWithDerivatives(); setNotPeriodic();
   if(gb_lista.size()>0){
     if(doneigh)  nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc(),nl_cut,nl_st);
@@ -121,6 +125,7 @@ firsttime(true)
   atoms.insert(atoms.end(),list_a.begin(),list_a.end());
   atoms.insert(atoms.end(),list_b.begin(),list_b.end());
   atoms.insert(atoms.end(),list_c.begin(),list_c.end());
+  atoms.insert(atoms.end(),list_d.begin(),list_d.end());
   requestAtoms(atoms);
 
 
@@ -135,6 +140,11 @@ firsttime(true)
   for(unsigned int i=0;i<gb_lista.size();++i){
    if ( (i+1) % 25 == 0 ) log.printf("  \n");
    log.printf("  %d", gb_lista[i].serial());
+  }
+  log.printf("  \n  third group:\n");
+  for(unsigned int i=0;i<gc_lista.size();++i){
+   if ( (i+1) % 25 == 0 ) log.printf("  \n");
+   log.printf("  %d", gc_lista[i].serial());
   }
   log.printf("  \n");
   if(pbc) log.printf("  using periodic boundary conditions\n");
@@ -172,11 +182,14 @@ void SolvationShellBase::calculate()
  //double qsolv=0.;
  double SolvationShell=0.0;
  //int lista_size = list_a.size();
- vector<double> sum_exp(list_a.size()+list_b.size()+list_c.size());
+ int len_acids = list_a.size()+list_b.size()+list_c.size()
+ int len_acids_hyd = len_acids + list_d.size()
+
+ vector<double> sum_exp(len_acids_hyd);
  fill(sum_exp.begin(),sum_exp.end(),0.);
 
  Tensor virial;
- vector<Vector> deriv(list_a.size()+list_b.size()+list_c.size());
+ vector<Vector> deriv(len_acids_hyd);
  Vector zeros;
  zeros.zero();
  fill(deriv.begin(), deriv.end(), zeros);
@@ -209,8 +222,8 @@ if(nt==0)nt=1;
  std::vector<Vector> omp_deriv(getPositions().size());
  Tensor omp_virial;
 
- Matrix<double> c(list_a.size()+list_b.size()+list_c.size(),list_a.size()+list_b.size()+list_c.size());
- vector<double> coord(list_a.size()+list_b.size());
+ Matrix<double> c(len_acids_hyd,len_acids_hyd);
+ vector<double> coord(len_acids);
  fill(coord.begin(),coord.end(),0.);
 
 //#pragma omp for reduction(+:voronoi) nowait
@@ -248,8 +261,8 @@ if(nt==0)nt=1;
 //  coord[i0] += c[i0][i1];
 // }
 
-   for(unsigned int j=list_a.size()+list_b.size();j<list_a.size()+list_b.size()+list_c.size();j++) {   
- for(unsigned int i=0;i<list_a.size()+list_b.size();i++) {   
+   for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
+ for(unsigned int i=0;i<len_acids;i++) {   
 
   Vector distance;
   
@@ -263,8 +276,8 @@ if(nt==0)nt=1;
 }
 
 
- for(unsigned int i=0;i<list_a.size()+list_b.size();i++) {   
-   for(unsigned int j=list_a.size()+list_b.size();j<list_a.size()+list_b.size()+list_c.size();j++) {   
+ for(unsigned int i=0;i<len_acids;i++) {   
+   for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
   Vector distance;
 
   if(pbc){
@@ -283,11 +296,11 @@ if(nt==0)nt=1;
 //    comm.Sum(dfunc_vor);
 // }
 
- vector<vector<vector<double> > > dfunc_coord(list_a.size()+list_b.size()+list_c.size(), vector<vector<double> >(list_a.size()+list_b.size()+list_c.size(), vector<double>(list_a.size()+list_b.size()+list_c.size())));
+ vector<vector<vector<double> > > dfunc_coord(len_acids_hyd, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids_hyd)));
 
- for(unsigned int i=0;i<list_a.size()+list_b.size();i++) {
-   for(unsigned int j=list_a.size()+list_b.size();j<list_a.size()+list_b.size()+list_c.size();j++){
-     for(unsigned int n=0;n<list_a.size()+list_b.size();n++) {
+ for(unsigned int i=0;i<len_acids;i++) {
+   for(unsigned int j=len_acids;j<len_acids_hyd;j++){
+     for(unsigned int n=0;n<len_acids;n++) {
        int d_in;
 
        if (i == n) d_in = 1;
@@ -318,9 +331,13 @@ if(nt==0)nt=1;
      c_tot[1] += coord[i];
  }
 
+ for(unsigned int i=list_a.size()+list_b.size();i<len_acids;i++) {
+     c_tot[2] += coord[i];
+ }
+
 
 // for(unsigned int i=rank;i<list_a.size();i+=stride) {
- for(unsigned int i=0;i<2;i++) {
+ for(unsigned int i=0;i<3;i++) {
      theta += pow(2,i)*(c_tot[i]-d[i]);
      //cout<< "i = "<< i << " theta = "<< theta << " 2^i = " << pow(2,i) << " c_tot[i] = " << c_tot[i] << endl;
      dfunc_theta[i] = pow(2,i);
@@ -341,17 +358,18 @@ if(nt==0)nt=1;
  //Tensor virial;
 
  //for(unsigned int m=rank;m<list_a.size()+list_b.size()+list_c.size();m+=stride) {
- for(unsigned int m=0;m<list_a.size()+list_b.size()+list_c.size();m++) {
+ for(unsigned int m=0;m<len_acids_hyd;m++) {
 
   Vector distance_nj;
 
 //#pragma omp for reduction(+:ncoord) nowait
        
+   //MCA: not sure if the stress tensor is really correct
    for(unsigned int i=0;i<list_a.size();i++) {   
-      for(unsigned int j=list_a.size()+list_b.size();j<list_a.size()+list_b.size()+list_c.size();j++) {
+      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 
          if (m == j){ 
-            for(unsigned int n=0;n<list_a.size()+list_b.size();n++) {   
+            for(unsigned int n=0;n<len_acids;n++) {   
       
                if(pbc){
                   distance_nj=pbcDistance(getPosition(n),getPosition(j));
@@ -364,7 +382,7 @@ if(nt==0)nt=1;
             continue;
          }
 
-         for(unsigned int n=0;n<list_a.size()+list_b.size();n++) {   
+         for(unsigned int n=0;n<len_acids;n++) {   
 
             if (m == n) {
 
@@ -381,6 +399,7 @@ if(nt==0)nt=1;
       } 
    }
 
+   //MCA: I did not update this part of the stres tensor...
    for(unsigned int i=list_a.size();i<list_a.size()+list_b.size();i++) {
       for(unsigned int j=list_a.size()+list_b.size();j<list_a.size()+list_b.size()+list_c.size();j++) {
 
