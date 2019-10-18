@@ -33,7 +33,7 @@ class SolvationShellBase : public Colvar {
   bool pbc;
   bool serial;
   NeighborList *nl;
-  std::vector<PLMD::AtomNumber> list_a,list_b,list_c;
+  std::vector<PLMD::AtomNumber> list_a,list_b,list_c,list_d;
   std::vector<PLMD::AtomNumber> atomsToRequest;
   bool invalidateList;
   bool firsttime;

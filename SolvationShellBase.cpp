@@ -69,7 +69,7 @@ firsttime(true)
 
   parseFlag("SERIAL",serial);
 
-  vector<AtomNumber> ga_lista,gb_lista,gc_lista;
+  vector<AtomNumber> ga_lista,gb_lista,gc_lista,gd_lista;
   parseAtomList("GROUPA",ga_lista);
   parseAtomList("GROUPB",gb_lista);
   parseAtomList("GROUPC",gc_lista);
@@ -182,8 +182,8 @@ void SolvationShellBase::calculate()
  //double qsolv=0.;
  double SolvationShell=0.0;
  //int lista_size = list_a.size();
- int len_acids = list_a.size()+list_b.size()+list_c.size()
- int len_acids_hyd = len_acids + list_d.size()
+ unsigned len_acids = list_a.size()+list_b.size()+list_c.size();
+ unsigned len_acids_hyd = len_acids + list_d.size();
 
  vector<double> sum_exp(len_acids_hyd);
  fill(sum_exp.begin(),sum_exp.end(),0.);
