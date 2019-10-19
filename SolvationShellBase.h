@@ -38,7 +38,7 @@ class SolvationShellBase : public Colvar {
   bool invalidateList;
   bool firsttime;
   int  pn, qn, pq, qq, lambda;
-  double r0, d0, d1, sum_exp;
+  double r0, d0, d1,d2, sum_exp; //MCA: added d2
   
 public:
   explicit SolvationShellBase(const ActionOptions&);

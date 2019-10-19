@@ -53,7 +53,8 @@ void SolvationShellBase::registerKeywords( Keywords& keys ){
   keys.add("compulsory","LAMBDA","1","The lambda parameter of the sum_exp function; 0 implies 1");
 //  keys.add("compulsory","LESS_THAN","0","The m parameter of the switching function; 0 implies 2*NN");
   keys.add("compulsory","D_0","0.0","The d_0 parameter of the switching function");
-  keys.add("compulsory","D_1","0.0","The d_0 parameter of the switching function");
+  keys.add("compulsory","D_1","0.0","The d_1 parameter of the switching function");
+  keys.add("compulsory","D_2","0.0","The d_2 parameter of the switching function");
 //  keys.add("compulsory","N_0","The n_0 parameter of the switching function");
 //  keys.add("compulsory","EQ_SHELL","Number of atoms in the shell at equilibrium");
 //  keys.add("compulsory","SWITCH_SIGN","Sign of the switching function for coordination");
@@ -90,6 +91,7 @@ firsttime(true)
 //  parse("MM_m",qm);
   parse("D_0",d0);
   parse("D_1",d1);
+  parse("D_2",d2);
   parse("LAMBDA",lambda);
 //  parse("LESS_THAN",less_than);
 
@@ -226,41 +228,6 @@ if(nt==0)nt=1;
  vector<double> coord(len_acids);
  fill(coord.begin(),coord.end(),0.);
 
-//#pragma omp for reduction(+:voronoi) nowait
-// for(unsigned int i=rank;i<nn;i+=stride) {   
-// for(unsigned int i=0;i<nn;i++) {   
-//  Vector distance;
-//  unsigned i0=nl->getClosePair(i).first;
-//  unsigned i1=nl->getClosePair(i).second;
-//
-//  if(getAbsoluteIndex(i0)==getAbsoluteIndex(i1)) continue;
-//  
-//  if(pbc){
-//   distance=pbcDistance(getPosition(i0),getPosition(i1));
-//  } else {
-//   distance=delta(getPosition(i0),getPosition(i1));
-//  }
-//  sum_exp[i1] += exp(lambda * distance.modulo());
-// }
-//
-// for(unsigned int i=0;i<nn;i++) {   
-//  Vector distance;
-//  unsigned i0=nl->getClosePair(i).first;
-//  unsigned i1=nl->getClosePair(i).second;
-//
-//  if(getAbsoluteIndex(i0)==getAbsoluteIndex(i1)) continue;
-//  
-//  if(pbc){
-//   distance=pbcDistance(getPosition(i0),getPosition(i1));
-//  } else {
-//   distance=delta(getPosition(i0),getPosition(i1));
-//  }
-//
-//  c[i0][i1] = exp( lambda * distance.modulo()) / sum_exp[i1];
-//
-//  coord[i0] += c[i0][i1];
-// }
-
    for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
  for(unsigned int i=0;i<len_acids;i++) {   
 
@@ -313,15 +280,16 @@ if(nt==0)nt=1;
 
 
  double theta = 0.;
- vector<double> dfunc_theta(2);
+ vector<double> dfunc_theta(3);
  fill(dfunc_theta.begin(),dfunc_theta.end(),0.);
  
- vector<double> c_tot(2);
+ vector<double> c_tot(3);
  fill(c_tot.begin(),c_tot.end(),0.);
 
- vector<double> d(2);
+ vector<double> d(3);
  d[0]=d0;
  d[1]=d1;
+ d[2]=d2;
 
  for(unsigned int i=0;i<list_a.size();i++) {
      c_tot[0] += coord[i]; 
