@@ -113,6 +113,7 @@ firsttime(true)
   
   //TODO: add neighbor list for gc_lista
   addValueWithDerivatives(); setNotPeriodic();
+  addValueWithDerivatives("dist"); setNotPeriodic("dist"); //MCA
   if(gb_lista.size()>0){
     if(doneigh)  nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc(),nl_cut,nl_st);
     else         nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc());
@@ -183,6 +184,7 @@ void SolvationShellBase::calculate()
 
  //double qsolv=0.;
  double SolvationShell=0.0;
+ double IonDistance=0.0;
  //int lista_size = list_a.size();
  unsigned len_acids = list_a.size()+list_b.size()+list_c.size();
  unsigned len_acids_hyd = len_acids + list_d.size();
@@ -191,25 +193,17 @@ void SolvationShellBase::calculate()
  fill(sum_exp.begin(),sum_exp.end(),0.);
 
  Tensor virial;
+ Tensor virial_dist; //MCA: IonDistance CV
  vector<Vector> deriv(len_acids_hyd);
+ vector<Vector> deriv_dist(len_acids_hyd);
  Vector zeros;
  zeros.zero();
  fill(deriv.begin(), deriv.end(), zeros);
- //deriv.resize(getPositions().size());
+ fill(deriv_dist.begin(), deriv_dist.end(), zeros);
 
  if(nl->getStride()>0 && invalidateList){
    nl->update(getPositions());
  }
-
-// unsigned stride=comm.Get_size();
-// unsigned rank=comm.Get_rank();
-// if(serial){
-//   stride=1;
-//   rank=0;
-// }else{
-//   stride=comm.Get_size();
-//   rank=comm.Get_rank();
-// }
 
 unsigned nt=OpenMP::getNumThreads();
 
@@ -218,7 +212,6 @@ const unsigned nn=nl->size();
 //if(nt*stride*10>nn) nt=nn/stride/10;
 if(nt==0)nt=1;
 
-
 #pragma omp parallel num_threads(nt)
 {
  std::vector<Vector> omp_deriv(getPositions().size());
@@ -226,7 +219,13 @@ if(nt==0)nt=1;
 
  Matrix<double> c(len_acids_hyd,len_acids_hyd);
  vector<double> coord(len_acids);
+ vector<double> charge(len_acids);
  fill(coord.begin(),coord.end(),0.);
+
+ std::vector<double> d;
+ d.insert(d.end(),list_a.size(),d0/list_a.size());
+ d.insert(d.end(),list_b.size(),d1/list_b.size());
+ d.insert(d.end(),list_c.size(),d2/list_c.size());
 
    for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
  for(unsigned int i=0;i<len_acids;i++) {   
@@ -242,7 +241,7 @@ if(nt==0)nt=1;
  }
 }
 
-
+//MCA: Ion distance CV
  for(unsigned int i=0;i<len_acids;i++) {   
    for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
   Vector distance;
@@ -256,12 +255,8 @@ if(nt==0)nt=1;
   c[i][j] = exp( lambda * distance.modulo()) / sum_exp[j];
   coord[i] += c[i][j];
  }
+ charge[i] = coord[i] - d[i];
 }
-
-// if(!serial){
-//    comm.Sum(voronoi);
-//    comm.Sum(dfunc_vor);
-// }
 
  vector<vector<vector<double> > > dfunc_coord(len_acids_hyd, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids_hyd)));
 
@@ -286,10 +281,10 @@ if(nt==0)nt=1;
  vector<double> c_tot(3);
  fill(c_tot.begin(),c_tot.end(),0.);
 
- vector<double> d(3);
- d[0]=d0;
- d[1]=d1;
- d[2]=d2;
+ vector<double> ds(3);
+ ds[0]=d0;
+ ds[1]=d1;
+ ds[2]=d2;
 
  for(unsigned int i=0;i<list_a.size();i++) {
      c_tot[0] += coord[i]; 
@@ -304,24 +299,28 @@ if(nt==0)nt=1;
  }
 
 
-// for(unsigned int i=rank;i<list_a.size();i+=stride) {
  for(unsigned int i=0;i<3;i++) {
-     theta += pow(2,i)*(c_tot[i]-d[i]);
-     //cout<< "i = "<< i << " theta = "<< theta << " 2^i = " << pow(2,i) << " c_tot[i] = " << c_tot[i] << endl;
+     theta += pow(2,i)*(c_tot[i]-ds[i]);
      dfunc_theta[i] = pow(2,i);
  }
-
-// if(!serial){
-//    comm.Sum(abs_coord_tot);
-//    comm.Sum(dfunc_abs_coord);
-// }
 
 
      SolvationShell = theta;
 
-// if(!serial){
-//    comm.Sum(SolvationShell);
-// }
+//MCA: Adding the Distace CV here
+ for(unsigned int i=0;i<len_acids;i++) {
+   for(unsigned int k=len_acids;k<len_acids_hyd;k++) {
+     Vector distance_ik;
+
+       if(pbc){
+         distance_ik=pbcDistance(getPosition(i),getPosition(k));
+       } else {
+         distance_ik=delta(getPosition(i),getPosition(k));
+       }
+
+     IonDistance -= distance_ik.modulo() * charge[i] * charge[k];
+   }
+ }
 
  //Tensor virial;
 
@@ -412,16 +411,16 @@ if(nt==0)nt=1;
  }
 }
 
-// if(!serial){
-//   comm.Sum(SolvationShell);
-//   if(!deriv.empty()) comm.Sum(&deriv[0][0],3*deriv.size());
-//   comm.Sum(virial);
-// }
-
  for(unsigned i=0;i<deriv.size();++i) setAtomsDerivatives(i,deriv[i]);
  setValue           (SolvationShell);
  setBoxDerivatives  (virial);
 
+ //MCA: dist CV inside one subroutine
+ Value* nvalue=getValue("dist");
+ for(unsigned i=0;i<deriv_dist.size();++i) setAtomsDerivatives(nvalue i,deriv_dist[i]);
+ setValue           (nvalue,IonDistance);
+ setBoxDerivatives  (nvalue,virial_dist);
+ 
  }
 }
 }
