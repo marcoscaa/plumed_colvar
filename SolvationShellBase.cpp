@@ -218,41 +218,39 @@ if(nt==0)nt=1;
  Tensor omp_virial;
 
  Matrix<double> c(len_acids_hyd,len_acids_hyd);
+ Matrix<double> dist(len_acids_hyd,len_acids_hyd,3);
  vector<double> coord(len_acids);
  vector<double> charge(len_acids);
  fill(coord.begin(),coord.end(),0.);
+ fill(dist.begin(),dist.end(),0.);
 
  std::vector<double> d;
  d.insert(d.end(),list_a.size(),d0/list_a.size());
  d.insert(d.end(),list_b.size(),d1/list_b.size());
  d.insert(d.end(),list_c.size(),d2/list_c.size());
 
-   for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
- for(unsigned int i=0;i<len_acids;i++) {   
-
-  Vector distance;
-  
-  if(pbc){
-   distance=pbcDistance(getPosition(i),getPosition(j));
-  } else {
-   distance=delta(getPosition(i),getPosition(j));
+for(unsigned int j=0;j<len_acids_hyd;j++) {   
+  for(unsigned int i=j+1;i<len_acids;i++) {   
+     if(pbc){
+        dist[i][j]=pbcDistance(getPosition(i),getPosition(j));
+     } else {
+        dist[i][j]=delta(getPosition(i),getPosition(j));
+     }
+     dist[j][i]=dist[i][j]
   }
-  sum_exp[j] += exp(lambda * distance.modulo());
- }
+}
+
+for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
+   for(unsigned int i=0;i<len_acids;i++) {   
+      sum_exp[j] += exp(lambda * dist[i][j].modulo());
+   }
 }
 
 //MCA: Ion distance CV
  for(unsigned int i=0;i<len_acids;i++) {   
    for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
-  Vector distance;
 
-  if(pbc){
-   distance=pbcDistance(getPosition(i),getPosition(j));
-  } else {
-   distance=delta(getPosition(i),getPosition(j));
-  }
-
-  c[i][j] = exp( lambda * distance.modulo()) / sum_exp[j];
+  c[i][j] = exp( lambda * dist[i][j].modulo()) / sum_exp[j];
   coord[i] += c[i][j];
  }
  charge[i] = coord[i] - d[i];
@@ -312,130 +310,29 @@ if(nt==0)nt=1;
    for(unsigned int k=len_acids;k<len_acids_hyd;k++) {
      Vector distance_ik;
 
-       if(pbc){
-         distance_ik=pbcDistance(getPosition(i),getPosition(k));
-       } else {
-         distance_ik=delta(getPosition(i),getPosition(k));
-       }
-
-     IonDistance -= distance_ik.modulo() * charge[i] * charge[k];
+     IonDistance -= dist[i][k].modulo() * charge[i] * charge[k];
    }
  }
 
- //Tensor virial;
+ double dftheta;
 
- //for(unsigned int m=rank;m<list_a.size()+list_b.size()+list_c.size();m+=stride) {
  for(unsigned int m=0;m<len_acids_hyd;m++) {
+  
+   if (m < list_a.size()){ dftheta=dfunc_theta[0] }
+   else if ( m < list_a.size()+list_b.size() ) { dftheta=dfunc_theta[1] }
+   else { dftheta=dfunc_theta[2] }
 
-  Vector distance_nj;
-
-//#pragma omp for reduction(+:ncoord) nowait
-       
-   //MCA: not sure if the stress tensor is really correct
-   for(unsigned int i=0;i<list_a.size();i++) {   
+   for(unsigned int i=0;i<len_acids;i++) {   
       for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 
          if (m == j){ 
             for(unsigned int n=0;n<len_acids;n++) {   
-      
-               if(pbc){
-                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
-               } else {
-                   distance_nj=delta(getPosition(n),getPosition(j));
-               }
-
-               deriv[m] += dfunc_theta[0] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
+               deriv[m] += dftheta * dfunc_coord[i][j][n] * dist[n][j]/dist[n][j].modulo();
             }
-            continue;
-         }
-
-         for(unsigned int n=0;n<len_acids;n++) {   
-
-            if (m == n) {
-
-               if(pbc){
-                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
-               } else {
-                  distance_nj=delta(getPosition(n),getPosition(j));
-               }
-
-               deriv[m] -= dfunc_theta[0] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
-               continue;
-            }
+         } else {
+            deriv[m] -= dftheta * dfunc_coord[i][j][m] * dist[m][j]/dist[m][j].modulo();
          }
       } 
-   }
-
-   for(unsigned int i=list_a.size();i<list_a.size()+list_b.size();i++) {
-      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
-
-         if (m == j){ 
-            for(unsigned int n=0;n<len_acids;n++) {
-
-               if(pbc){
-                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
-               } else {
-                  distance_nj=delta(getPosition(n),getPosition(j));
-               }
-            
-               deriv[m] += dfunc_theta[1] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
-            } 
-            continue;
-         }
-
-         for(unsigned int n=0;n<len_acids;n++) {
-
-            if (m == n) {
-
-               if(pbc){
-                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
-               } else {
-                  distance_nj=delta(getPosition(n),getPosition(j));
-               }
-
-
-               deriv[m] -= dfunc_theta[1] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
-               
-               continue;
-            }
-         }
-      }
-   }
-
-   for(unsigned int i=list_a.size()+list_b.size();i<len_acids;i++) {
-      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
-
-         if (m == j){ 
-            for(unsigned int n=0;n<len_acids;n++) {
-
-               if(pbc){
-                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
-               } else {
-                  distance_nj=delta(getPosition(n),getPosition(j));
-               }
-            
-               deriv[m] += dfunc_theta[2] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
-            } 
-            continue;
-         }
-
-         for(unsigned int n=0;n<len_acids;n++) {
-
-            if (m == n) {
-
-               if(pbc){
-                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
-               } else {
-                  distance_nj=delta(getPosition(n),getPosition(j));
-               }
-
-
-               deriv[m] -= dfunc_theta[2] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
-               
-               continue;
-            }
-         }
-      }
    }
 }
 
