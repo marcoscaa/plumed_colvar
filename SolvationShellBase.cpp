@@ -366,12 +366,11 @@ if(nt==0)nt=1;
       } 
    }
 
-   //MCA: I did not update this part of the stres tensor...
    for(unsigned int i=list_a.size();i<list_a.size()+list_b.size();i++) {
-      for(unsigned int j=list_a.size()+list_b.size();j<list_a.size()+list_b.size()+list_c.size();j++) {
+      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 
          if (m == j){ 
-            for(unsigned int n=0;n<list_a.size()+list_b.size();n++) {
+            for(unsigned int n=0;n<len_acids;n++) {
 
                if(pbc){
                   distance_nj=pbcDistance(getPosition(n),getPosition(j));
@@ -384,7 +383,7 @@ if(nt==0)nt=1;
             continue;
          }
 
-         for(unsigned int n=0;n<list_a.size()+list_b.size();n++) {
+         for(unsigned int n=0;n<len_acids;n++) {
 
             if (m == n) {
 
@@ -396,6 +395,42 @@ if(nt==0)nt=1;
 
 
                deriv[m] -= dfunc_theta[1] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
+               
+               continue;
+            }
+         }
+      }
+   }
+
+   for(unsigned int i=list_a.size()+list_b.size();i<len_acids;i++) {
+      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
+
+         if (m == j){ 
+            for(unsigned int n=0;n<len_acids;n++) {
+
+               if(pbc){
+                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
+               } else {
+                  distance_nj=delta(getPosition(n),getPosition(j));
+               }
+            
+               deriv[m] += dfunc_theta[2] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
+            } 
+            continue;
+         }
+
+         for(unsigned int n=0;n<len_acids;n++) {
+
+            if (m == n) {
+
+               if(pbc){
+                  distance_nj=pbcDistance(getPosition(n),getPosition(j));
+               } else {
+                  distance_nj=delta(getPosition(n),getPosition(j));
+               }
+
+
+               deriv[m] -= dfunc_theta[2] * dfunc_coord[i][j][n] * distance_nj/distance_nj.modulo();
                
                continue;
             }
