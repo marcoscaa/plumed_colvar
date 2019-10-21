@@ -259,14 +259,12 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
  vector<vector<vector<double> > > dfunc_coord(len_acids_hyd, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids_hyd)));
 
  for(unsigned int i=0;i<len_acids;i++) {
+   dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-     for(unsigned int n=0;n<len_acids;n++) {
-       int d_in;
+     for(unsigned int n=i+1;n<len_acids;n++) {
 
-       if (i == n) d_in = 1;
-       if (i != n) d_in = 0;
-
-       dfunc_coord[i][j][n] = lambda *  c[n][j] * (d_in - c[i][j]);
+       dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
+       dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
      }
    }
  }
@@ -296,46 +294,96 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
      c_tot[2] += coord[i];
  }
 
-
  for(unsigned int i=0;i<3;i++) {
      theta += pow(2,i)*(c_tot[i]-ds[i]);
      dfunc_theta[i] = pow(2,i);
  }
 
-
      SolvationShell = theta;
+
+vector<int> acid_index(len_acids);
+ for(unsigned int i=0;i<len_acids;i++) {
+     if(i<list_a.size()) { 
+       acid_index[i]=1; 
+     } else if(i<list_b.size()) {
+       acid_index[i]=2; 
+     } else {
+       acid_index[i]=3; 
+     }
+ }
+
 
 //MCA: Adding the Distace CV here
  for(unsigned int i=0;i<len_acids;i++) {
-   for(unsigned int k=len_acids;k<len_acids_hyd;k++) {
-     Vector distance_ik;
-
-     IonDistance -= dist[i][k].modulo() * charge[i] * charge[k];
+   for(unsigned int k=i+1;k<len_acids;k++) {
+     if(acid_index[i]!=acid_index[k]) {
+       IonDistance -= dist[i][k].modulo() * charge[i] * charge[k];
+     }
    }
  }
 
- double dftheta;
-
+//MCA: derivatives for the SolvationShell CV
  for(unsigned int m=0;m<len_acids_hyd;m++) {
   
-   if (m < list_a.size()){ dftheta=dfunc_theta[0] }
-   else if ( m < list_a.size()+list_b.size() ) { dftheta=dfunc_theta[1] }
-   else { dftheta=dfunc_theta[2] }
-
    for(unsigned int i=0;i<len_acids;i++) {   
+
       for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 
          if (m == j){ 
             for(unsigned int n=0;n<len_acids;n++) {   
-               deriv[m] += dftheta * dfunc_coord[i][j][n] * dist[n][j]/dist[n][j].modulo();
+               deriv[m] += dfunc_theta[acid_index[i]] * dfunc_coord[i][j][n] 
+                         * dist[n][j]/dist[n][j].modulo();
             }
          } else {
-            deriv[m] -= dftheta * dfunc_coord[i][j][m] * dist[m][j]/dist[m][j].modulo();
+            deriv[m] -= dfunc_theta[acid_index[i]] * dfunc_coord[i][j][m] 
+                      * dist[m][j]/dist[m][j].modulo();
          }
       } 
    }
 }
 
+//MCA: derivatives for the IonDistance CV
+double chargedist;
+for(unsigned int m=0;m<len_acids;m++) {
+   for( unsigned int n=m+1;n<len_acids;n++) {
+      if(acid_index[m]!=acid_index[n]) {
+        chargedist = charge[m] * charge[n] * dist[m][n]/dist[m][n].modulo();
+        deriv[m] += chargedist;
+        deriv[n] -= chargedist; 
+      }
+   }
+}
+for(unsigned int m=0;m<len_acids_hyd;m++) {
+  for(unsigned int h=len_acids;h<len_acids_hyd;m++) {
+    if(h==m) {
+      for(unsigned int n=0;n<len_acids;n++) {   
+        for(unsigned int i=0;i<len_acids;i++) {
+          for(unsigned int k=i+1;k<len_acids;k++) { 
+            //MCA: double check the i, k indexes
+            if(acid_index[i]!=acid_index[k]){
+              deriv[m] -= dist[i][k].modulo() 
+                       * ( charge[k] * dfunc_coord[i][h][n] 
+                       +   charge[i] * dfunc_coord[k][h][n] ) 
+                       * dist[n][h]/dist[n][h].modulo();
+            }          
+          }    
+        }
+      }
+    } else {
+      for(unsigned int i=0;i<len_acids;i++) {
+        for(unsigned int k=i+1;k<len_acids;k++) { 
+          //MCA: double check the i, k indexes
+          if(acid_index[i]!=acid_index[k]){
+            deriv[m] += dist[i][k].modulo() 
+                     * ( charge[k] * dfunc_coord[i][h][n] 
+                     +   charge[i] * dfunc_coord[k][h][n] ) 
+                     * dist[n][h]/dist[n][h].modulo();
+          }          
+        }    
+      }
+    }
+  }
+}
 #pragma omp critical
  if(nt>1){
   for(int i=0;i<getPositions().size();i++) deriv[i]+=omp_deriv[i];
