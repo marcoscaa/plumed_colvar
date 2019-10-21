@@ -58,6 +58,8 @@ void SolvationShellBase::registerKeywords( Keywords& keys ){
 //  keys.add("compulsory","N_0","The n_0 parameter of the switching function");
 //  keys.add("compulsory","EQ_SHELL","Number of atoms in the shell at equilibrium");
 //  keys.add("compulsory","SWITCH_SIGN","Sign of the switching function for coordination");
+  keys.addOutputComponent("sp","default","the position on the path");
+  keys.addOutputComponent("sd","default","the distance from the path");
 }
 
 SolvationShellBase::SolvationShellBase(const ActionOptions&ao):
@@ -112,8 +114,8 @@ firsttime(true)
   }
   
   //TODO: add neighbor list for gc_lista
-  addValueWithDerivatives(); setNotPeriodic();
-  addValueWithDerivatives("dist"); setNotPeriodic("dist"); //MCA
+  addComponentWithDerivatives("sp"); componentIsNotPeriodic("sp");
+  addComponentWithDerivatives("sd"); componentIsNotPeriodic("sd");
   if(gb_lista.size()>0){
     if(doneigh)  nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc(),nl_cut,nl_st);
     else         nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc());
@@ -130,7 +132,6 @@ firsttime(true)
   atoms.insert(atoms.end(),list_c.begin(),list_c.end());
   atoms.insert(atoms.end(),list_d.begin(),list_d.end());
   requestAtoms(atoms);
-
 
 
   log.printf("  between two groups of %u and %u atoms\n",static_cast<unsigned>(ga_lista.size()),static_cast<unsigned>(gb_lista.size()));
@@ -218,11 +219,12 @@ if(nt==0)nt=1;
  Tensor omp_virial;
 
  Matrix<double> c(len_acids_hyd,len_acids_hyd);
- Matrix<double> dist(len_acids_hyd,len_acids_hyd,3);
+ //Matrix<double> dist(len_acids_hyd,len_acids_hyd);
+ //std::vector<std::vector<Vector>> dist;
+ vector<vector<Vector>> dist(len_acids_hyd, vector<Vector>(len_acids_hyd));
  vector<double> coord(len_acids);
  vector<double> charge(len_acids);
  fill(coord.begin(),coord.end(),0.);
- fill(dist.begin(),dist.end(),0.);
 
  std::vector<double> d;
  d.insert(d.end(),list_a.size(),d0/list_a.size());
@@ -236,7 +238,7 @@ for(unsigned int j=0;j<len_acids_hyd;j++) {
      } else {
         dist[i][j]=delta(getPosition(i),getPosition(j));
      }
-     dist[j][i]=dist[i][j]
+     dist[j][i] = dist[i][j];
   }
 }
 
@@ -256,11 +258,14 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
  charge[i] = coord[i] - d[i];
 }
 
- vector<vector<vector<double> > > dfunc_coord(len_acids_hyd, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids_hyd)));
+ //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
+ vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
 
  for(unsigned int i=0;i<len_acids;i++) {
-   dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
+
+
+     dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
      for(unsigned int n=i+1;n<len_acids;n++) {
 
        dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
@@ -304,11 +309,11 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
      if(i<list_a.size()) { 
-       acid_index[i]=1; 
+       acid_index[i]=0; 
      } else if(i<list_b.size()) {
-       acid_index[i]=2; 
+       acid_index[i]=1; 
      } else {
-       acid_index[i]=3; 
+       acid_index[i]=2; 
      }
  }
 
@@ -342,64 +347,64 @@ vector<int> acid_index(len_acids);
    }
 }
 
-//MCA: derivatives for the IonDistance CV
-double chargedist;
+//MCA: deriv_distatives for the IonDistance CV
 for(unsigned int m=0;m<len_acids;m++) {
    for( unsigned int n=m+1;n<len_acids;n++) {
       if(acid_index[m]!=acid_index[n]) {
+        Vector chargedist;
         chargedist = charge[m] * charge[n] * dist[m][n]/dist[m][n].modulo();
-        deriv[m] += chargedist;
-        deriv[n] -= chargedist; 
+        deriv_dist[m] += chargedist;
+        deriv_dist[n] -= chargedist; 
+      }
+      for( unsigned int k=n+1;n<len_acids;n++) {
+         if(acid_index[n]!=acid_index[k]) {
+            for(unsigned int h=len_acids;h<len_acids_hyd;h++) {
+
+               //MCA: double check the i, k indexes
+               deriv_dist[m] -= dist[k][n].modulo() 
+                        * ( charge[k] * dfunc_coord[n][h][m] 
+                        +   charge[n] * dfunc_coord[k][h][m] ) 
+                        * dist[m][h]/dist[m][h].modulo();
+            }
+         }    
       }
    }
 }
-for(unsigned int m=0;m<len_acids_hyd;m++) {
-  for(unsigned int h=len_acids;h<len_acids_hyd;m++) {
-    if(h==m) {
-      for(unsigned int n=0;n<len_acids;n++) {   
-        for(unsigned int i=0;i<len_acids;i++) {
-          for(unsigned int k=i+1;k<len_acids;k++) { 
-            //MCA: double check the i, k indexes
-            if(acid_index[i]!=acid_index[k]){
-              deriv[m] -= dist[i][k].modulo() 
-                       * ( charge[k] * dfunc_coord[i][h][n] 
-                       +   charge[i] * dfunc_coord[k][h][n] ) 
-                       * dist[n][h]/dist[n][h].modulo();
+for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
+   for(unsigned int i=0;i<len_acids;i++) {
+      for(unsigned int k=i+1;k<len_acids;k++) { 
+         //MCA: double check the i, k indexes
+         if(acid_index[i]!=acid_index[k]){
+            for( unsigned int n=0;n<len_acids;n++) {
+               deriv_dist[m] += dist[i][k].modulo() 
+                              * ( charge[k] * dfunc_coord[i][m][n] 
+                              +   charge[i] * dfunc_coord[k][m][n] ) 
+                              * dist[n][m]/dist[n][m].modulo();
             }          
-          }    
-        }
+         }    
       }
-    } else {
-      for(unsigned int i=0;i<len_acids;i++) {
-        for(unsigned int k=i+1;k<len_acids;k++) { 
-          //MCA: double check the i, k indexes
-          if(acid_index[i]!=acid_index[k]){
-            deriv[m] += dist[i][k].modulo() 
-                     * ( charge[k] * dfunc_coord[i][h][n] 
-                     +   charge[i] * dfunc_coord[k][h][n] ) 
-                     * dist[n][h]/dist[n][h].modulo();
-          }          
-        }    
-      }
-    }
-  }
+   }
 }
+
 #pragma omp critical
  if(nt>1){
-  for(int i=0;i<getPositions().size();i++) deriv[i]+=omp_deriv[i];
+  for(unsigned i=0;i<getPositions().size();i++) deriv[i]+=omp_deriv[i];
   virial+=omp_virial;
  }
 }
 
- for(unsigned i=0;i<deriv.size();++i) setAtomsDerivatives(i,deriv[i]);
- setValue           (SolvationShell);
- setBoxDerivatives  (virial);
+ Value* vsp=getPntrToComponent("sp");
+ Value* vsd=getPntrToComponent("sd");
 
- //MCA: dist CV inside one subroutine
- Value* nvalue=getValue("dist");
- for(unsigned i=0;i<deriv_dist.size();++i) setAtomsDerivatives(nvalue i,deriv_dist[i]);
- setValue           (nvalue,IonDistance);
- setBoxDerivatives  (nvalue,virial_dist);
+ for(unsigned i=0;i<deriv.size();++i) setAtomsDerivatives(vsp,i,deriv[i]);
+ //setValue           (vsp,SolvationShell);
+ vsp->set(SolvationShell);
+ //setBoxDerivatives  (vsp,virial);
+
+ for(unsigned i=0;i<deriv_dist.size();++i) setAtomsDerivatives(vsd,i,deriv_dist[i]);
+ //setValue           (vsd,IonDistance);
+ vsd->set(IonDistance);
+ //setBoxDerivatives  (vsd,virial_dist);
  
  }
 }
