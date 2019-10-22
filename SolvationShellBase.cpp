@@ -242,6 +242,8 @@ for(unsigned int j=0;j<len_acids_hyd;j++) {
   }
 }
 
+cout<< "Marker 1" << dist[0][1] << endl;
+
 for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
    for(unsigned int i=0;i<len_acids;i++) {   
       sum_exp[j] += exp(lambda * dist[i][j].modulo());
@@ -257,6 +259,8 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
  }
  charge[i] = coord[i] - d[i];
 }
+
+cout<< "Marker 2" << charge[0] << endl;
 
  //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
  vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
@@ -274,6 +278,7 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
    }
  }
 
+cout<< "Marker 3" << dfunc_coord[0][0][0] << endl;
 
  double theta = 0.;
  vector<double> dfunc_theta(3);
@@ -306,6 +311,8 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 
      SolvationShell = theta;
 
+cout<< "Marker 4" << theta << endl;
+
 vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
      if(i<list_a.size()) { 
@@ -327,6 +334,8 @@ vector<int> acid_index(len_acids);
    }
  }
 
+cout<< "Marker 5" << IonDistance << endl;
+
 //MCA: derivatives for the SolvationShell CV
  for(unsigned int m=0;m<len_acids_hyd;m++) {
   
@@ -347,6 +356,8 @@ vector<int> acid_index(len_acids);
    }
 }
 
+cout<< "Marker 6" << endl;
+
 //MCA: deriv_distatives for the IonDistance CV
 for(unsigned int m=0;m<len_acids;m++) {
    for( unsigned int n=m+1;n<len_acids;n++) {
@@ -356,7 +367,7 @@ for(unsigned int m=0;m<len_acids;m++) {
         deriv_dist[m] += chargedist;
         deriv_dist[n] -= chargedist; 
       }
-      for( unsigned int k=n+1;n<len_acids;n++) {
+      for( unsigned int k=n+1;k<len_acids;k++) {
          if(acid_index[n]!=acid_index[k]) {
             for(unsigned int h=len_acids;h<len_acids_hyd;h++) {
 
@@ -370,6 +381,9 @@ for(unsigned int m=0;m<len_acids;m++) {
       }
    }
 }
+
+cout<< "Marker 7" << endl;
+
 for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
    for(unsigned int i=0;i<len_acids;i++) {
       for(unsigned int k=i+1;k<len_acids;k++) { 
@@ -385,6 +399,8 @@ for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
       }
    }
 }
+
+cout<< "Marker 8" << endl;
 
 #pragma omp critical
  if(nt>1){
