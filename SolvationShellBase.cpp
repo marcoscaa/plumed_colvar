@@ -231,18 +231,26 @@ if(nt==0)nt=1;
  d.insert(d.end(),list_b.size(),d1/list_b.size());
  d.insert(d.end(),list_c.size(),d2/list_c.size());
 
-for(unsigned int j=0;j<len_acids_hyd;j++) {   
-  for(unsigned int i=j+1;i<len_acids;i++) {   
+for(unsigned int i=0;i<len_acids;i++) {   
+  for(unsigned int j=i+1;j<len_acids;j++) {   
      if(pbc){
         dist[i][j]=pbcDistance(getPosition(i),getPosition(j));
      } else {
         dist[i][j]=delta(getPosition(i),getPosition(j));
      }
-     dist[j][i] = dist[i][j];
+     dist[j][i] = -dist[i][j];
+  }
+  for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
+     if(pbc){
+        dist[i][j]=pbcDistance(getPosition(i),getPosition(j));
+     } else {
+        dist[i][j]=delta(getPosition(i),getPosition(j));
+     }
   }
 }
 
-cout<< "Marker 1" << dist[0][1] << endl;
+//cout<< "Marker 1" << d0 << d1 << d2 << endl;
+//cout<< "Marker 1.5" << d[0] << d[list_a.size()] << d[list_b.size()] << endl;
 
 for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
    for(unsigned int i=0;i<len_acids;i++) {   
@@ -258,6 +266,7 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
   coord[i] += c[i][j];
  }
  charge[i] = coord[i] - d[i];
+ cout<< i << " " << charge[i] << endl;
 }
 
 cout<< "Marker 2" << charge[0] << endl;
