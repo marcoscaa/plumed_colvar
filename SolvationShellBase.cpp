@@ -249,9 +249,6 @@ for(unsigned int i=0;i<len_acids;i++) {
   }
 }
 
-//cout<< "Marker 1" << d0 << d1 << d2 << endl;
-//cout<< "Marker 1.5" << d[0] << d[list_a.size()] << d[list_b.size()] << endl;
-
 for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
    for(unsigned int i=0;i<len_acids;i++) {   
       sum_exp[j] += exp(lambda * dist[i][j].modulo());
@@ -266,10 +263,7 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
   coord[i] += c[i][j];
  }
  charge[i] = coord[i] - d[i];
- cout<< i << " " << charge[i] << endl;
 }
-
-cout<< "Marker 2" << charge[0] << endl;
 
  //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
  vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
@@ -286,8 +280,6 @@ cout<< "Marker 2" << charge[0] << endl;
      }
    }
  }
-
-cout<< "Marker 3" << dfunc_coord[0][0][0] << endl;
 
  double theta = 0.;
  vector<double> dfunc_theta(3);
@@ -320,8 +312,6 @@ cout<< "Marker 3" << dfunc_coord[0][0][0] << endl;
 
      SolvationShell = theta;
 
-cout<< "Marker 4" << theta << endl;
-
 vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
      if(i<list_a.size()) { 
@@ -343,8 +333,6 @@ vector<int> acid_index(len_acids);
    }
  }
 
-cout<< "Marker 5" << IonDistance << endl;
-
 //MCA: derivatives for the SolvationShell CV
  for(unsigned int m=0;m<len_acids_hyd;m++) {
   
@@ -364,8 +352,6 @@ cout<< "Marker 5" << IonDistance << endl;
       } 
    }
 }
-
-cout<< "Marker 6" << endl;
 
 //MCA: deriv_distatives for the IonDistance CV
 for(unsigned int m=0;m<len_acids;m++) {
@@ -391,8 +377,6 @@ for(unsigned int m=0;m<len_acids;m++) {
    }
 }
 
-cout<< "Marker 7" << endl;
-
 for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
    for(unsigned int i=0;i<len_acids;i++) {
       for(unsigned int k=i+1;k<len_acids;k++) { 
@@ -408,8 +392,6 @@ for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
       }
    }
 }
-
-cout<< "Marker 8" << endl;
 
 #pragma omp critical
  if(nt>1){
