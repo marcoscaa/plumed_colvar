@@ -316,7 +316,7 @@ vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
      if(i<list_a.size()) { 
        acid_index[i]=0; 
-     } else if(i<list_b.size()) {
+     } else if(i<list_a.size()+list_b.size()) {
        acid_index[i]=1; 
      } else {
        acid_index[i]=2; 
