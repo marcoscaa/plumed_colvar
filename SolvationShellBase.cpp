@@ -334,40 +334,37 @@ vector<int> acid_index(len_acids);
  }
 
 //MCA: derivatives for the SolvationShell CV
- for(unsigned int m=0;m<len_acids_hyd;m++) {
-  
+ for(unsigned int m=0;m<len_acids;m++) {
    for(unsigned int i=0;i<len_acids;i++) {   
-
-      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
-
-         if (m == j){ 
-            for(unsigned int n=0;n<len_acids;n++) {   
-               deriv[m] += dfunc_theta[acid_index[i]] * dfunc_coord[i][j][n] 
-                         * dist[n][j]/dist[n][j].modulo();
-            }
-         } else {
-            deriv[m] -= dfunc_theta[acid_index[i]] * dfunc_coord[i][j][m] 
-                      * dist[m][j]/dist[m][j].modulo();
-         }
+     for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
+       deriv[m] -= dfunc_theta[acid_index[i]] * dfunc_coord[i][j][m] 
+                 * dist[m][j]/dist[m][j].modulo();
+     } 
+  }
+}
+ for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
+   for(unsigned int i=0;i<len_acids;i++) {   
+     for(unsigned int n=0;n<len_acids;n++) {   
+        deriv[m] += dfunc_theta[acid_index[i]] * dfunc_coord[i][m][n] 
+                  * dist[n][m]/dist[n][m].modulo();
       } 
    }
 }
 
 //MCA: deriv_distatives for the IonDistance CV
 for(unsigned int m=0;m<len_acids;m++) {
-   for( unsigned int n=m+1;n<len_acids;n++) {
+   for( unsigned int n=0;n<len_acids;n++) {
       if(acid_index[m]!=acid_index[n]) {
         Vector chargedist;
         chargedist = charge[m] * charge[n] * dist[m][n]/dist[m][n].modulo();
-        deriv_dist[m] += chargedist;
-        deriv_dist[n] -= chargedist; 
+        deriv_dist[m] -= chargedist;
       }
       for( unsigned int k=n+1;k<len_acids;k++) {
          if(acid_index[n]!=acid_index[k]) {
             for(unsigned int h=len_acids;h<len_acids_hyd;h++) {
 
                //MCA: double check the i, k indexes
-               deriv_dist[m] -= dist[k][n].modulo() 
+               deriv_dist[m] += dist[k][n].modulo() 
                         * ( charge[k] * dfunc_coord[n][h][m] 
                         +   charge[n] * dfunc_coord[k][h][m] ) 
                         * dist[m][h]/dist[m][h].modulo();
@@ -383,7 +380,7 @@ for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
          //MCA: double check the i, k indexes
          if(acid_index[i]!=acid_index[k]){
             for( unsigned int n=0;n<len_acids;n++) {
-               deriv_dist[m] += dist[i][k].modulo() 
+               deriv_dist[m] -= dist[i][k].modulo() 
                               * ( charge[k] * dfunc_coord[i][m][n] 
                               +   charge[i] * dfunc_coord[k][m][n] ) 
                               * dist[n][m]/dist[n][m].modulo();
