@@ -221,7 +221,8 @@ if(nt==0)nt=1;
  Matrix<double> c(len_acids_hyd,len_acids_hyd);
  //Matrix<double> dist(len_acids_hyd,len_acids_hyd);
  //std::vector<std::vector<Vector>> dist;
- vector<vector<Vector>> dist(len_acids_hyd, vector<Vector>(len_acids_hyd));
+ vector<vector<Vector>> dist(len_acids, vector<Vector>(len_acids_hyd));
+ Matrix<double> distmod(len_acids,len_acids_hyd);
  vector<double> coord(len_acids);
  vector<double> charge(len_acids);
  fill(coord.begin(),coord.end(),0.);
@@ -239,6 +240,8 @@ for(unsigned int i=0;i<len_acids;i++) {
         dist[i][j]=delta(getPosition(i),getPosition(j));
      }
      dist[j][i] = -dist[i][j];
+     distmod[i][j] = dist[i][j].modulo();
+     distmod[j][i] = distmod[i][j];
   }
   for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
      if(pbc){
@@ -246,12 +249,13 @@ for(unsigned int i=0;i<len_acids;i++) {
      } else {
         dist[i][j]=delta(getPosition(i),getPosition(j));
      }
+     distmod[i][j] = dist[i][j].modulo();
   }
 }
 
 for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
    for(unsigned int i=0;i<len_acids;i++) {   
-      sum_exp[j] += exp(lambda * dist[i][j].modulo());
+      sum_exp[j] += exp(lambda * distmod[i][j]);
    }
 }
 
@@ -259,7 +263,7 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
  for(unsigned int i=0;i<len_acids;i++) {   
    for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
 
-  c[i][j] = exp( lambda * dist[i][j].modulo()) / sum_exp[j];
+  c[i][j] = exp( lambda * distmod[i][j] ) / sum_exp[j];
   coord[i] += c[i][j];
  }
  charge[i] = coord[i] - d[i];
@@ -328,7 +332,7 @@ vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int k=i+1;k<len_acids;k++) {
      if(acid_index[i]!=acid_index[k]) {
-       IonDistance -= dist[i][k].modulo() * charge[i] * charge[k];
+       IonDistance -= distmod[i][k] * charge[i] * charge[k];
      }
    }
  }
@@ -338,7 +342,7 @@ vector<int> acid_index(len_acids);
    for(unsigned int i=0;i<len_acids;i++) {   
      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
        deriv[m] -= dfunc_theta[acid_index[i]] * dfunc_coord[i][j][m] 
-                 * dist[m][j]/dist[m][j].modulo();
+                 * dist[m][j]/distmod[m][j];
      } 
   }
 }
@@ -346,7 +350,7 @@ vector<int> acid_index(len_acids);
    for(unsigned int i=0;i<len_acids;i++) {   
      for(unsigned int n=0;n<len_acids;n++) {   
         deriv[m] += dfunc_theta[acid_index[i]] * dfunc_coord[i][m][n] 
-                  * dist[n][m]/dist[n][m].modulo();
+                  * dist[n][m]/distmod[n][m];
       } 
    }
 }
@@ -356,7 +360,7 @@ for(unsigned int m=0;m<len_acids;m++) {
    for( unsigned int n=0;n<len_acids;n++) {
       if(acid_index[m]!=acid_index[n]) {
         Vector chargedist;
-        chargedist = charge[m] * charge[n] * dist[m][n]/dist[m][n].modulo();
+        chargedist = charge[m] * charge[n] * dist[m][n]/distmod[m][n];
         deriv_dist[m] += chargedist;
       }
       for( unsigned int k=n+1;k<len_acids;k++) {
@@ -364,10 +368,10 @@ for(unsigned int m=0;m<len_acids;m++) {
             for(unsigned int h=len_acids;h<len_acids_hyd;h++) {
 
                //MCA: double check the i, k indexes
-               deriv_dist[m] += dist[k][n].modulo() 
+               deriv_dist[m] += distmod[k][n] 
                         * ( charge[k] * dfunc_coord[n][h][m] 
                         +   charge[n] * dfunc_coord[k][h][m] ) 
-                        * dist[m][h]/dist[m][h].modulo();
+                        * dist[m][h]/distmod[m][h];
             }
          }    
       }
@@ -380,10 +384,10 @@ for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
          //MCA: double check the i, k indexes
          if(acid_index[i]!=acid_index[k]){
             for( unsigned int n=0;n<len_acids;n++) {
-               deriv_dist[m] -= dist[i][k].modulo() 
+               deriv_dist[m] -= distmod[i][k] 
                               * ( charge[k] * dfunc_coord[i][m][n] 
                               +   charge[i] * dfunc_coord[k][m][n] ) 
-                              * dist[n][m]/dist[n][m].modulo();
+                              * dist[n][m]/distmod[n][m];
             }          
          }    
       }
