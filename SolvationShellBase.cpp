@@ -357,7 +357,7 @@ for(unsigned int m=0;m<len_acids;m++) {
       if(acid_index[m]!=acid_index[n]) {
         Vector chargedist;
         chargedist = charge[m] * charge[n] * dist[m][n]/dist[m][n].modulo();
-        deriv_dist[m] -= chargedist;
+        deriv_dist[m] += chargedist;
       }
       for( unsigned int k=n+1;k<len_acids;k++) {
          if(acid_index[n]!=acid_index[k]) {
