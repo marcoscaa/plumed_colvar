@@ -42,24 +42,16 @@ void SolvationShellBase::registerKeywords( Keywords& keys ){
   keys.addFlag("NLIST",false,"Use a neighbour list to speed up the calculation");
   keys.add("optional","NL_CUTOFF","The cutoff for the neighbour list");
   keys.add("optional","NL_STRIDE","The frequency with which we are updating the atoms in the neighbour list");
-  keys.add("atoms","GROUPA","First list of atoms");
-  keys.add("atoms","GROUPB","Second list of atoms (if empty, N*(N-1)/2 pairs in GROUPA are counted)");
-  keys.add("atoms","GROUPC","Third list of atoms (if empty, N*(N-1)/2 pairs in GROUPA are counted)");
-  keys.add("atoms","GROUPD","Fourth list of atoms (if empty, N*(N-1)/2 pairs in GROUPA are counted)");
-//  keys.add("compulsory","NN_n","6","The n parameter of the switching function ");
-//  keys.add("compulsory","MM_n","0","The m parameter of the switching function; 0 implies 2*NN");
-//  keys.add("compulsory","NN_m","6","The n parameter of the switching function ");
-//  keys.add("compulsory","MM_m","0","The m parameter of the switching function; 0 implies 2*NN");
+  keys.add("atoms","GROUPA","First Acid/Base group");
+  keys.add("atoms","GROUPB","Second Acid/Base group)");
+  keys.add("atoms","GROUPC","Third Acid/Base group");
+  keys.add("atoms","GROUPD","List of Hydrogen Atoms");
   keys.add("compulsory","LAMBDA","1","The lambda parameter of the sum_exp function; 0 implies 1");
-//  keys.add("compulsory","LESS_THAN","0","The m parameter of the switching function; 0 implies 2*NN");
   keys.add("compulsory","D_0","0.0","The d_0 parameter of the switching function");
   keys.add("compulsory","D_1","0.0","The d_1 parameter of the switching function");
   keys.add("compulsory","D_2","0.0","The d_2 parameter of the switching function");
-//  keys.add("compulsory","N_0","The n_0 parameter of the switching function");
-//  keys.add("compulsory","EQ_SHELL","Number of atoms in the shell at equilibrium");
-//  keys.add("compulsory","SWITCH_SIGN","Sign of the switching function for coordination");
-  keys.addOutputComponent("sp","default","the position on the path");
-  keys.addOutputComponent("sd","default","the distance from the path");
+  keys.addOutputComponent("sp","default","Protonation state order parameter");
+  keys.addOutputComponent("sd","default","Acid-base distance order parameter");
 }
 
 SolvationShellBase::SolvationShellBase(const ActionOptions&ao):
@@ -87,15 +79,10 @@ firsttime(true)
   parseFlag("NOPBC",nopbc);
   pbc=!nopbc;
 
-//  parse("NN_n",pn);
-//  parse("MM_n",qn);
-//  parse("NN_m",pm);
-//  parse("MM_m",qm);
   parse("D_0",d0);
   parse("D_1",d1);
   parse("D_2",d2);
   parse("LAMBDA",lambda);
-//  parse("LESS_THAN",less_than);
 
 // pair stuff
   bool dopair=false;
@@ -116,6 +103,7 @@ firsttime(true)
   //TODO: add neighbor list for gc_lista
   addComponentWithDerivatives("sp"); componentIsNotPeriodic("sp");
   addComponentWithDerivatives("sd"); componentIsNotPeriodic("sd");
+  addComponentWithDerivatives("tc"); componentIsNotPeriodic("tc");
   if(gb_lista.size()>0){
     if(doneigh)  nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc(),nl_cut,nl_st);
     else         nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc());
@@ -183,10 +171,11 @@ void SolvationShellBase::prepare(){
 void SolvationShellBase::calculate()
 {
 
- //double qsolv=0.;
+ //The 3 scalar CVs
  double SolvationShell=0.0;
  double IonDistance=0.0;
- //int lista_size = list_a.size();
+ double TotalCharge=0.0;
+ //Length of acids groups, with and without the H atoms
  unsigned len_acids = list_a.size()+list_b.size()+list_c.size();
  unsigned len_acids_hyd = len_acids + list_d.size();
 
@@ -197,6 +186,7 @@ void SolvationShellBase::calculate()
  Tensor virial_dist; //MCA: IonDistance CV
  vector<Vector> deriv(len_acids_hyd);
  vector<Vector> deriv_dist(len_acids_hyd);
+ vector<Vector> deriv_tc(len_acids_hyd);
  Vector zeros;
  zeros.zero();
  fill(deriv.begin(), deriv.end(), zeros);
@@ -291,36 +281,6 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
    }
  }
 
- double theta = 0.;
- vector<double> dfunc_theta(3);
- fill(dfunc_theta.begin(),dfunc_theta.end(),0.);
- 
- vector<double> c_tot(3);
- fill(c_tot.begin(),c_tot.end(),0.);
-
- vector<double> ds(3);
- ds[0]=d0;
- ds[1]=d1;
- ds[2]=d2;
-
- for(unsigned int i=0;i<list_a.size();i++) {
-     c_tot[0] += coord[i]; 
- }
- 
- for(unsigned int i=list_a.size();i<list_a.size()+list_b.size();i++) {
-     c_tot[1] += coord[i];
- }
-
- for(unsigned int i=list_a.size()+list_b.size();i<len_acids;i++) {
-     c_tot[2] += coord[i];
- }
-
- for(unsigned int i=0;i<3;i++) {
-     theta += pow(2,i)*(c_tot[i]-ds[i]);
-     dfunc_theta[i] = pow(2,i);
- }
-
-     SolvationShell = theta;
 
 vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
@@ -333,6 +293,18 @@ vector<int> acid_index(len_acids);
      }
  }
 
+ vector<double> square(3);
+
+ square[0] = pow(2,0);
+ square[1] = pow(2,1);
+ square[2] = pow(2,2);
+
+#pragma omp parallel for reduction(+:SolvationShell,TotalCharge)
+ for(unsigned int i=0;i<len_acids;i++) {
+     SolvationShell += square(acid_index[i])*charge[i];
+     TotalCharge    += sqrt(pow(charge[i],2)+alpha)
+     dfunc_theta[i]  = charge[i]/sqrt(pow(charge[i],2)+alpha);
+ }
 
 //MCA: Adding the Distace CV here
 #pragma omp parallel for reduction(+:IonDistance)
@@ -349,7 +321,7 @@ vector<int> acid_index(len_acids);
  for(unsigned int m=0;m<len_acids;m++) {
    for(unsigned int i=0;i<len_acids;i++) {   
      for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
-       omp_deriv[m] -= dfunc_theta[acid_index[i]] * dfunc_coord[i][j][m] 
+       omp_deriv[m] -= square[acid_index[i]] * dfunc_coord[i][j][m] 
                  * dist[m][j]/distmod[m][j];
      } 
   }
@@ -358,7 +330,7 @@ vector<int> acid_index(len_acids);
  for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
    for(unsigned int i=0;i<len_acids;i++) {   
      for(unsigned int n=0;n<len_acids;n++) {   
-        omp_deriv[m] += dfunc_theta[acid_index[i]] * dfunc_coord[i][m][n] 
+        omp_deriv[m] += square[acid_index[i]] * dfunc_coord[i][m][n] 
                   * dist[n][m]/distmod[n][m];
       } 
    }
@@ -410,6 +382,7 @@ for(unsigned i=0;i<len_acids_hyd;i++) deriv_dist[i]+=omp_deriv_dist[i];
 
  Value* vsp=getPntrToComponent("sp");
  Value* vsd=getPntrToComponent("sd");
+ Value* vtc=getPntrToComponent("tc");
 
  for(unsigned i=0;i<deriv.size();++i) setAtomsDerivatives(vsp,i,deriv[i]);
  //setValue           (vsp,SolvationShell);
@@ -419,6 +392,11 @@ for(unsigned i=0;i<len_acids_hyd;i++) deriv_dist[i]+=omp_deriv_dist[i];
  for(unsigned i=0;i<deriv_dist.size();++i) setAtomsDerivatives(vsd,i,deriv_dist[i]);
  //setValue           (vsd,IonDistance);
  vsd->set(IonDistance);
+ //setBoxDerivatives  (vsd,virial_dist);
+ 
+ for(unsigned i=0;i<deriv_tc.size();++i) setAtomsDerivatives(vtc,i,deriv_tc[i]);
+ //setValue           (vsd,IonDistance);
+ vsd->set(TotalCharge);
  //setBoxDerivatives  (vsd,virial_dist);
  
  }
