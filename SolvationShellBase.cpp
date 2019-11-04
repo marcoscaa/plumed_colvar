@@ -53,6 +53,7 @@ void SolvationShellBase::registerKeywords( Keywords& keys ){
   keys.addOutputComponent("sp","default","Protonation state order parameter");
   keys.addOutputComponent("sd","default","Acid-base distance order parameter");
   keys.addOutputComponent("tc","default","Total charge order parameter");
+
 }
 
 SolvationShellBase::SolvationShellBase(const ActionOptions&ao):
@@ -112,7 +113,7 @@ firsttime(true)
     if(doneigh)  nl= new NeighborList(ga_lista,pbc,getPbc(),nl_cut,nl_st);
     else         nl= new NeighborList(ga_lista,pbc,getPbc());
   }
-  
+
 //  requestAtoms(nl->getFullAtomList());
  
   std::vector<AtomNumber> atoms;
@@ -121,7 +122,6 @@ firsttime(true)
   atoms.insert(atoms.end(),list_c.begin(),list_c.end());
   atoms.insert(atoms.end(),list_d.begin(),list_d.end());
   requestAtoms(atoms);
-
 
   log.printf("  between two groups of %u and %u atoms\n",static_cast<unsigned>(ga_lista.size()),static_cast<unsigned>(gb_lista.size()));
   log.printf("  first group:\n");
@@ -147,10 +147,13 @@ firsttime(true)
    log.printf("  using neighbor lists with\n");
    log.printf("  update every %d steps and cutoff %f\n",nl_st,nl_cut);
   }
+
 }
 
 SolvationShellBase::~SolvationShellBase(){
+  cout << "##########Crazy1###########";
   delete nl;
+  cout << "##########Crazy2###########";
 }
 
 void SolvationShellBase::prepare(){
@@ -172,6 +175,7 @@ void SolvationShellBase::prepare(){
 void SolvationShellBase::calculate()
 {
 
+ cout << "Tag -2 ";
  //The 3 scalar CVs
  double SolvationShell=0.0;
  double IonDistance=0.0;
@@ -206,6 +210,8 @@ const unsigned nn=nl->size();
 
 //if(nt*stride*10>nn) nt=nn/stride/10;
 if(nt==0)nt=1;
+
+cout << "Tag -1 ";
 
  std::vector<Vector> omp_deriv(len_acids_hyd);
  std::vector<Vector> omp_deriv_dist(len_acids_hyd);
@@ -290,12 +296,16 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
  vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
  vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
 
+cout << "Tag 1 ";
+
 for(unsigned i=0;i<len_acids;i++) {
   for(unsigned j=0;j<len_acids_hyd;j++) {
     dfunc_delta[i][j]=zeros;
     ompdfunc_delta[i][j]=zeros;
   }
 }
+
+cout << "Tag 2 ";
 
 #pragma omp parallel for
  for(unsigned int i=0;i<len_acids;i++) {
@@ -308,6 +318,8 @@ for(unsigned i=0;i<len_acids;i++) {
      }       
    }
  }
+
+cout << "Tag 3 ";
 
 //delete[] dfunc_coord;
 
@@ -339,12 +351,16 @@ vector<int> acid_index(len_acids);
 
  vector<double> dfunc_theta(len_acids);
 
+cout << "Tag 4 ";
+
 #pragma omp parallel for reduction(+:SolvationShell,TotalCharge)
  for(unsigned int i=0;i<len_acids;i++) {
      SolvationShell += square[acid_index[i]]*charge[i];
      TotalCharge    += sqrt(pow(charge[i],2)+alpha);
      dfunc_theta[i]  = charge[i]/sqrt(pow(charge[i],2)+alpha);
  }
+
+cout << "Tag 5 ";
 
 //MCA: Adding the Distace CV here
 #pragma omp parallel for reduction(+:IonDistance)
@@ -356,6 +372,8 @@ vector<int> acid_index(len_acids);
    }
  }
 
+cout << "Tag 6 ";
+
 //MCA: derivatives for the SolvationShell CV
 #pragma omp parallel for
  for(unsigned int m=0;m<len_acids_hyd;m++) {
@@ -364,6 +382,8 @@ vector<int> acid_index(len_acids);
      omp_deriv_tc[m] += dfunc_theta[i] * dfunc_delta[i][m];
   }
 }
+
+cout << "Tag 7 ";
 
 //MCA: deriv_distatives for the IonDistance CV
 #pragma omp parallel for
@@ -382,6 +402,8 @@ for(unsigned int m=0;m<len_acids_hyd;m++) {
       }
    }
 }
+
+cout << "Tag 8 ";
 
 #pragma omp critical
 for(unsigned i=0;i<len_acids_hyd;i++) deriv[i]+=omp_deriv[i];
