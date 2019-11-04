@@ -52,6 +52,7 @@ void SolvationShellBase::registerKeywords( Keywords& keys ){
   keys.add("compulsory","D_2","0.0","The d_2 parameter of the switching function");
   keys.addOutputComponent("sp","default","Protonation state order parameter");
   keys.addOutputComponent("sd","default","Acid-base distance order parameter");
+  keys.addOutputComponent("tc","default","Total charge order parameter");
 }
 
 SolvationShellBase::SolvationShellBase(const ActionOptions&ao):
@@ -179,6 +180,8 @@ void SolvationShellBase::calculate()
  unsigned len_acids = list_a.size()+list_b.size()+list_c.size();
  unsigned len_acids_hyd = len_acids + list_d.size();
 
+ double alpha=0.0001;
+
  vector<double> sum_exp(len_acids_hyd);
  fill(sum_exp.begin(),sum_exp.end(),0.);
 
@@ -284,9 +287,15 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
    }
  }
 
- vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd, Vector));
- vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd, Vector));
- fill(ompdfunc_delta.begin(), ompdfunc_delta.end(), zeros);
+ vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
+ vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
+
+for(unsigned i=0;i<len_acids;i++) {
+  for(unsigned j=0;j<len_acids_hyd;j++) {
+    dfunc_delta[i][j]=zeros;
+    ompdfunc_delta[i][j]=zeros;
+  }
+}
 
 #pragma omp parallel for
  for(unsigned int i=0;i<len_acids;i++) {
@@ -300,7 +309,7 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
    }
  }
 
-delete[] dfunc_coord;
+//delete[] dfunc_coord;
 
 #pragma omp critical
 for(unsigned i=0;i<len_acids;i++) {
@@ -309,7 +318,7 @@ for(unsigned i=0;i<len_acids;i++) {
   }
 }
 
-delete[] ompdfunc_delta;
+//delete[] ompdfunc_delta;
 
 vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
@@ -328,10 +337,12 @@ vector<int> acid_index(len_acids);
  square[1] = pow(2,1);
  square[2] = pow(2,2);
 
+ vector<double> dfunc_theta(len_acids);
+
 #pragma omp parallel for reduction(+:SolvationShell,TotalCharge)
  for(unsigned int i=0;i<len_acids;i++) {
-     SolvationShell += square(acid_index[i])*charge[i];
-     TotalCharge    += sqrt(pow(charge[i],2)+alpha)
+     SolvationShell += square[acid_index[i]]*charge[i];
+     TotalCharge    += sqrt(pow(charge[i],2)+alpha);
      dfunc_theta[i]  = charge[i]/sqrt(pow(charge[i],2)+alpha);
  }
 
