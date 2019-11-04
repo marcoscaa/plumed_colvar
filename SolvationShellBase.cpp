@@ -43,7 +43,7 @@ void SolvationShellBase::registerKeywords( Keywords& keys ){
   keys.add("optional","NL_CUTOFF","The cutoff for the neighbour list");
   keys.add("optional","NL_STRIDE","The frequency with which we are updating the atoms in the neighbour list");
   keys.add("atoms","GROUPA","First Acid/Base group");
-  keys.add("atoms","GROUPB","Second Acid/Base group)");
+  keys.add("atoms","GROUPB","Second Acid/Base group");
   keys.add("atoms","GROUPC","Third Acid/Base group");
   keys.add("atoms","GROUPD","List of Hydrogen Atoms");
   keys.add("compulsory","LAMBDA","1","The lambda parameter of the sum_exp function; 0 implies 1");
