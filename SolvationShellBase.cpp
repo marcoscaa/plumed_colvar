@@ -191,6 +191,7 @@ void SolvationShellBase::calculate()
  zeros.zero();
  fill(deriv.begin(), deriv.end(), zeros);
  fill(deriv_dist.begin(), deriv_dist.end(), zeros);
+ fill(deriv_tc.begin(), deriv_tc.end(), zeros);
 
  if(nl->getStride()>0 && invalidateList){
    nl->update(getPositions());
@@ -205,8 +206,10 @@ if(nt==0)nt=1;
 
  std::vector<Vector> omp_deriv(len_acids_hyd);
  std::vector<Vector> omp_deriv_dist(len_acids_hyd);
+ std::vector<Vector> omp_deriv_tc(len_acids_hyd);
  fill(omp_deriv.begin(), omp_deriv.end(), zeros);
  fill(omp_deriv_dist.begin(), omp_deriv_dist.end(), zeros);
+ fill(omp_deriv_tc.begin(), omp_deriv_tc.end(), zeros);
  Tensor omp_virial;
 
  Matrix<double> c(len_acids_hyd,len_acids_hyd);
@@ -281,6 +284,32 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
    }
  }
 
+ vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd, Vector));
+ vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd, Vector));
+ fill(ompdfunc_delta.begin(), ompdfunc_delta.end(), zeros);
+
+#pragma omp parallel for
+ for(unsigned int i=0;i<len_acids;i++) {
+   for(unsigned int j=len_acids;j<len_acids_hyd;j++){
+     for(unsigned int k=0;k<len_acids;k++) {
+     
+       ompdfunc_delta[i][k] += dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
+       ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[i][j]/distmod[i][j];
+
+     }       
+   }
+ }
+
+delete[] dfunc_coord;
+
+#pragma omp critical
+for(unsigned i=0;i<len_acids;i++) {
+  for(unsigned j=0;j<len_acids_hyd;j++) {
+    dfunc_delta[i][j]+=ompdfunc_delta[i][j];
+  }
+}
+
+delete[] ompdfunc_delta;
 
 vector<int> acid_index(len_acids);
  for(unsigned int i=0;i<len_acids;i++) {
@@ -318,57 +347,26 @@ vector<int> acid_index(len_acids);
 
 //MCA: derivatives for the SolvationShell CV
 #pragma omp parallel for
- for(unsigned int m=0;m<len_acids;m++) {
+ for(unsigned int m=0;m<len_acids_hyd;m++) {
    for(unsigned int i=0;i<len_acids;i++) {   
-     for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
-       omp_deriv[m] -= square[acid_index[i]] * dfunc_coord[i][j][m] 
-                 * dist[m][j]/distmod[m][j];
-     } 
+     omp_deriv[m] += square[acid_index[i]] * dfunc_delta[i][m];
+     omp_deriv_tc[m] += dfunc_theta[i] * dfunc_delta[i][m];
   }
-}
-#pragma omp parallel for
- for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
-   for(unsigned int i=0;i<len_acids;i++) {   
-     for(unsigned int n=0;n<len_acids;n++) {   
-        omp_deriv[m] += square[acid_index[i]] * dfunc_coord[i][m][n] 
-                  * dist[n][m]/distmod[n][m];
-      } 
-   }
 }
 
 //MCA: deriv_distatives for the IonDistance CV
 #pragma omp parallel for
-for(unsigned int m=0;m<len_acids;m++) {
+for(unsigned int m=0;m<len_acids_hyd;m++) {
    for( unsigned int n=0;n<len_acids;n++) {
       if(acid_index[m]!=acid_index[n]) {
         omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
       }
       for( unsigned int k=n+1;k<len_acids;k++) {
          if(acid_index[n]!=acid_index[k]) {
-            for(unsigned int h=len_acids;h<len_acids_hyd;h++) {
-
-               //MCA: double check the i, k indexes
-               omp_deriv_dist[m] += distmod[k][n] 
-                        * ( charge[k] * dfunc_coord[n][h][m] 
-                        +   charge[n] * dfunc_coord[k][h][m] ) 
-                        * dist[m][h]/distmod[m][h];
-            }
-         }    
-      }
-   }
-}
-#pragma omp parallel for
-for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
-   for(unsigned int i=0;i<len_acids;i++) {
-      for(unsigned int k=i+1;k<len_acids;k++) { 
-         //MCA: double check the i, k indexes
-         if(acid_index[i]!=acid_index[k]){
-            for( unsigned int n=0;n<len_acids;n++) {
-               omp_deriv_dist[m] -= distmod[i][k] 
-                              * ( charge[k] * dfunc_coord[i][m][n] 
-                              +   charge[i] * dfunc_coord[k][m][n] ) 
-                              * dist[n][m]/distmod[n][m];
-            }          
+           //MCA: double check the i, k indexes
+           omp_deriv_dist[m] += distmod[k][n] 
+                    * ( charge[k] * dfunc_delta[n][m] 
+                    +   charge[n] * dfunc_delta[k][m] ); 
          }    
       }
    }
@@ -378,7 +376,8 @@ for(unsigned int m=len_acids;m<len_acids_hyd;m++) {
 for(unsigned i=0;i<len_acids_hyd;i++) deriv[i]+=omp_deriv[i];
 #pragma omp critical
 for(unsigned i=0;i<len_acids_hyd;i++) deriv_dist[i]+=omp_deriv_dist[i];
-//virial+=omp_virial;
+#pragma omp critical
+for(unsigned i=0;i<len_acids_hyd;i++) deriv_tc[i]+=omp_deriv_tc[i];
 
  Value* vsp=getPntrToComponent("sp");
  Value* vsd=getPntrToComponent("sd");
@@ -396,7 +395,7 @@ for(unsigned i=0;i<len_acids_hyd;i++) deriv_dist[i]+=omp_deriv_dist[i];
  
  for(unsigned i=0;i<deriv_tc.size();++i) setAtomsDerivatives(vtc,i,deriv_tc[i]);
  //setValue           (vsd,IonDistance);
- vsd->set(TotalCharge);
+ vtc->set(TotalCharge);
  //setBoxDerivatives  (vsd,virial_dist);
  
  }
