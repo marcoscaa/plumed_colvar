@@ -312,13 +312,14 @@ for(unsigned i=0;i<len_acids;i++) {
      for(unsigned int k=0;k<len_acids;k++) {
      
        ompdfunc_delta[i][k] += dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
-       ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[i][j]/distmod[i][j];
+       ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
 
      }       
    }
  }
 
 //cout << "Tag 3 " << endl;
+//
 
 //delete[] dfunc_coord;
 
@@ -377,8 +378,8 @@ for(unsigned i=0;i<len_acids;i++) {
 #pragma omp parallel for
  for(unsigned int m=0;m<len_acids_hyd;m++) {
    for(unsigned int i=0;i<len_acids;i++) {   
-     omp_deriv[m] += square[acid_index[i]] * dfunc_delta[i][m];
-     omp_deriv_tc[m] += dfunc_theta[i] * dfunc_delta[i][m];
+     omp_deriv[m] -= square[acid_index[i]] * dfunc_delta[i][m];
+     omp_deriv_tc[m] -= dfunc_theta[i] * dfunc_delta[i][m];
   }
 }
 
