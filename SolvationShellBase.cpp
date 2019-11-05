@@ -360,6 +360,8 @@ for(unsigned i=0;i<len_acids;i++) {
      dfunc_theta[i]  = charge[i]/sqrt(charge[i]*charge[i]+alpha);
  }
 
+TotalCharge -= len_acids * sqrt(alpha);
+
 //cout << "Tag 5 " << endl;
 
 //MCA: Adding the Distace CV here
