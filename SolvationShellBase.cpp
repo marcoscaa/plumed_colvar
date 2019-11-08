@@ -365,11 +365,13 @@ TotalCharge -= len_acids * sqrt(alpha);
 //cout << "Tag 5 " << endl;
 
 //MCA: Adding the Distace CV here
+//our CV is slightly different from the original Grifonni's CV, as it 
+//includes the z component of the distance, and not its modulo
 #pragma omp parallel for reduction(+:IonDistance)
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int k=i+1;k<len_acids;k++) {
      if(acid_index[i]!=acid_index[k]) {
-       IonDistance -= distmod[i][k] * charge[i] * charge[k];
+       IonDistance -= dist[i][k][2] * charge[i] * charge[k];
      }
    }
  }
@@ -392,12 +394,15 @@ TotalCharge -= len_acids * sqrt(alpha);
 for(unsigned int m=0;m<len_acids_hyd;m++) {
    for( unsigned int n=0;n<len_acids;n++) {
       if((m<len_acids)&&(acid_index[m]!=acid_index[n])) {
-        omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
+        //omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
+        omp_deriv_dist[m][2] -= charge[m] * charge[n];
       }
       for( unsigned int k=n+1;k<len_acids;k++) {
          if(acid_index[n]!=acid_index[k]) {
-           //MCA: double check the i, k indexes
-           omp_deriv_dist[m] += distmod[k][n] 
+           //omp_deriv_dist[m] += distmod[k][n] 
+           //         * ( charge[k] * dfunc_delta[n][m] 
+           //         +   charge[n] * dfunc_delta[k][m] ); 
+           omp_deriv_dist[m] -= dist[k][n][2] 
                     * ( charge[k] * dfunc_delta[n][m] 
                     +   charge[n] * dfunc_delta[k][m] ); 
          }    
