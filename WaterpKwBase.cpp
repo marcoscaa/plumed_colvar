@@ -151,7 +151,7 @@ void WaterpKwBase::calculate()
 {
 
  //cout << "Tag -2 ###########################";
- //The 3 scalar CVs
+ //The 2 scalar CVs
  double IonDistance=0.0;
  double TotalCharge=0.0;
  //Length of acids groups, with and without the H atoms
@@ -278,10 +278,12 @@ for(unsigned i=0;i<len_acids;i++) {
 #pragma omp parallel for
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-     for(unsigned int k=0;k<len_acids;k++) {
+     for(unsigned int k=i+1;k<len_acids;k++) {
      
        ompdfunc_delta[i][k] += dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
+       ompdfunc_delta[k][i] += dfunc_coord[k][j][i] * dist[i][j]/distmod[i][j];
        ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
+       ompdfunc_delta[k][j] -= dfunc_coord[k][j][i] * dist[i][j]/distmod[i][j];
 
      }       
    }
@@ -295,7 +297,7 @@ for(unsigned i=0;i<len_acids;i++) {
 #pragma omp critical
 for(unsigned i=0;i<len_acids;i++) {
   for(unsigned j=0;j<len_acids_hyd;j++) {
-    dfunc_delta[i][j]+=ompdfunc_delta[i][j];
+    dfunc_delta[i][j]=ompdfunc_delta[i][j];
   }
 }
 
@@ -319,7 +321,7 @@ TotalCharge -= len_acids * sqrt(alpha);
 #pragma omp parallel for reduction(+:IonDistance)
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int k=i+1;k<len_acids;k++) {
-     IonDistance -= abs(distmod[i][k]) * charge[i] * charge[k];
+     IonDistance -= distmod[i][k] * charge[i] * charge[k];
    }
  }
 
@@ -339,13 +341,15 @@ TotalCharge -= len_acids * sqrt(alpha);
 #pragma omp parallel for
 for(unsigned int m=0;m<len_acids_hyd;m++) {
    for( unsigned int n=0;n<len_acids;n++) {
-      if(m<len_acids) {
-        omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
-      }
-      for( unsigned int k=n+1;k<len_acids;k++) {
-        omp_deriv_dist[m] += distmod[k][n] 
-                 * ( charge[k] * dfunc_delta[n][m] 
-                 +   charge[n] * dfunc_delta[k][m] ); 
+      if(m!=n) {
+         if(m<len_acids) {
+           omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
+         }
+         for( unsigned int k=n+1;k<len_acids;k++) {
+           omp_deriv_dist[m] += distmod[k][n] 
+                    * ( charge[k] * dfunc_delta[n][m] 
+                    +   charge[n] * dfunc_delta[k][m] ); 
+         }
       }
    }
 }
