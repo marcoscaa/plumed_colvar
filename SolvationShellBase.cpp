@@ -371,7 +371,7 @@ TotalCharge -= len_acids * sqrt(alpha);
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int k=i+1;k<len_acids;k++) {
      if(acid_index[i]!=acid_index[k]) {
-       IonDistance -= dist[i][k][2] * charge[i] * charge[k];
+       IonDistance -= abs(dist[i][k][2]) * charge[i] * charge[k];
      }
    }
  }
@@ -395,14 +395,14 @@ for(unsigned int m=0;m<len_acids_hyd;m++) {
    for( unsigned int n=0;n<len_acids;n++) {
       if((m<len_acids)&&(acid_index[m]!=acid_index[n])) {
         //omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
-        omp_deriv_dist[m][2] -= charge[m] * charge[n];
+        omp_deriv_dist[m][2] += charge[m] * charge[n];
       }
       for( unsigned int k=n+1;k<len_acids;k++) {
          if(acid_index[n]!=acid_index[k]) {
            //omp_deriv_dist[m] += distmod[k][n] 
            //         * ( charge[k] * dfunc_delta[n][m] 
            //         +   charge[n] * dfunc_delta[k][m] ); 
-           omp_deriv_dist[m] -= dist[k][n][2] 
+           omp_deriv_dist[m] += abs(dist[k][n][2])
                     * ( charge[k] * dfunc_delta[n][m] 
                     +   charge[n] * dfunc_delta[k][m] ); 
          }    

@@ -38,7 +38,7 @@ class WaterpKwBase : public Colvar {
   bool invalidateList;
   bool firsttime;
   int  pn, qn, pq, qq, lambda;
-  double r0, d0 sum_exp; //MCA: added d2
+  double r0, d0, sum_exp; //MCA: added d2
   
 public:
   explicit WaterpKwBase(const ActionOptions&);

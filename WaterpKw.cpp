@@ -105,7 +105,7 @@ public:
   virtual double dsw_func(double arg, double sw_cutoff, double sw_shift, int p, int q);
 };
 
-PLUMED_REGISTER_ACTION(WaterpKw,"SOLVATION")
+PLUMED_REGISTER_ACTION(WaterpKw,"WaterpKw")
 
 void WaterpKw::registerKeywords( Keywords& keys ){
   WaterpKwBase::registerKeywords(keys);
