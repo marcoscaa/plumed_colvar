@@ -28,6 +28,8 @@
 #include <string>
 #include <cmath>
 #include <iostream>
+#include "time.h"
+#include <iomanip>
 
 
 using namespace std;
@@ -160,6 +162,7 @@ void WaterpKwBase::calculate()
 
  //Parameter controlling the smotthness of the |x| function
  double alpha=0.0001;
+ double rcut=3.0; //MCA: neighbor list
 
  vector<double> sum_exp(len_acids_hyd);
  fill(sum_exp.begin(),sum_exp.end(),0.);
@@ -204,6 +207,12 @@ if(nt==0)nt=1;
  std::vector<double> d;
  d.insert(d.end(),list_a.size(),d0);
 
+ //MCA: clock stuff
+ clock_t t0,tf;
+ double total_time;
+
+t0 = clock();
+
 #pragma omp parallel for
 for(unsigned int i=0;i<len_acids;i++) {   
   for(unsigned int j=i+1;j<len_acids;j++) {   
@@ -226,11 +235,23 @@ for(unsigned int i=0;i<len_acids;i++) {
   }
 }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "01 Dist compute: "  << fixed << setprecision(5) << total_time << endl;
+
+t0 = clock();
+
 for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
    for(unsigned int i=0;i<len_acids;i++) {   
       sum_exp[j] += exp(lambda * distmod[i][j]);
    }
 }
+
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "02 sum_exp compute: "  << fixed << setprecision(5) << total_time << endl;
+
+t0 = clock();
 
 //MCA: Ion distance CV
  for(unsigned int i=0;i<len_acids;i++) {   
@@ -238,16 +259,23 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
    #pragma omp parallel for reduction(+:sum_tmp)
    for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
 
-     c[i][j] = exp( lambda * distmod[i][j] ) / sum_exp[j];
-     //coord[i] += c[i][j];
-     sum_tmp += c[i][j];
+      c[i][j] = exp( lambda * distmod[i][j] ) / sum_exp[j];
+      //coord[i] += c[i][j];
+      sum_tmp += c[i][j];
+
    }
    coord[i] = sum_tmp;
    charge[i] = coord[i] - d[i];
 }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "03 c_ij compute: "  << fixed << setprecision(5) << total_time << endl;
+
  //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
  vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
+
+t0 = clock();
 
 #pragma omp parallel for
  for(unsigned int i=0;i<len_acids;i++) {
@@ -262,10 +290,16 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
    }
  }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "04 dfun_coord compute: "  << fixed << setprecision(5) << total_time << endl;
+
  std::vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
  std::vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
 
 //cout << "Tag 1 " << dist[0][0].modulo() << endl;
+
+t0 = clock();
 
 for(unsigned i=0;i<len_acids;i++) {
   for(unsigned j=0;j<len_acids_hyd;j++) {
@@ -274,7 +308,13 @@ for(unsigned i=0;i<len_acids;i++) {
   }
 }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "05 dfun_delta compute: "  << fixed << setprecision(5) << total_time << endl;
+
 //cout << "Tag 2 " << endl;
+
+t0 = clock();
 
 #pragma omp parallel for
  for(unsigned int i=0;i<len_acids;i++) {
@@ -288,10 +328,16 @@ for(unsigned i=0;i<len_acids;i++) {
    }
  }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "06 ompdfun_delta compute: "  << fixed << setprecision(5) << total_time << endl;
+
 //cout << "Tag 3 " << endl;
 //
 
 //delete[] dfunc_coord;
+
+t0 = clock();
 
 #pragma omp critical
 for(unsigned i=0;i<len_acids;i++) {
@@ -300,11 +346,17 @@ for(unsigned i=0;i<len_acids;i++) {
   }
 }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "07 dfunc_delta compute: "  << fixed << setprecision(5) << total_time << endl;
+
 //delete[] ompdfunc_delta;
 
  std::vector<double> dfunc_theta(len_acids);
 
 //cout << "Tag 4 " << endl;
+
+t0 = clock();
 
 #pragma omp parallel for reduction(+:TotalCharge)
  for(unsigned int i=0;i<len_acids;i++) {
@@ -312,9 +364,14 @@ for(unsigned i=0;i<len_acids;i++) {
      dfunc_theta[i]  = charge[i]/sqrt(charge[i]*charge[i]+alpha);
  }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "08 Total charge compute: "  << fixed << setprecision(5) << total_time << endl;
+
 TotalCharge -= len_acids * sqrt(alpha);
 
 //cout << "Tag 5 " << endl;
+t0 = clock();
 
 //MCA: Adding the Distace CV here
 #pragma omp parallel for reduction(+:IonDistance)
@@ -324,7 +381,12 @@ TotalCharge -= len_acids * sqrt(alpha);
    }
  }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "09 Ion distance compute: "  << fixed << setprecision(5) << total_time << endl;
+
 //cout << "Tag 6 " << endl;
+t0 = clock();
 
 //MCA: derivatives for the WaterpKw CV
 #pragma omp parallel for
@@ -334,6 +396,11 @@ TotalCharge -= len_acids * sqrt(alpha);
   }
 }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "10 omp_deriv_tc compute: "  << fixed << setprecision(5) << total_time << endl;
+
+t0 = clock();
 //cout << "Tag 7 " << endl;
 
 //MCA: deriv_distatives for the IonDistance CV
@@ -351,12 +418,21 @@ for(unsigned int m=0;m<len_acids_hyd;m++) {
    }
 }
 
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "11 omp_deriv_dist compute: "  << fixed << setprecision(5) << total_time << endl;
+
 //cout << "Tag 8 " << endl;
+t0 = clock();
 
 #pragma omp critical
 for(unsigned i=0;i<len_acids_hyd;i++) deriv_dist[i]+=omp_deriv_dist[i];
 #pragma omp critical
 for(unsigned i=0;i<len_acids_hyd;i++) deriv_tc[i]+=omp_deriv_tc[i];
+
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "12 critical compute: "  << fixed << setprecision(5) << total_time << endl;
 
  Value* vsd=getPntrToComponent("sd");
  Value* vtc=getPntrToComponent("tc");
