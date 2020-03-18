@@ -343,17 +343,34 @@ TotalCharge -= len_acids * sqrt(alpha);
 //cout << "Tag 7 " << endl;
 
 //MCA: deriv_distatives for the IonDistance CV
+//#pragma omp parallel for
+//for(unsigned int m=0;m<len_acids_hyd;m++) {
+//   for( unsigned int n=0;n<len_acids;n++) {
+//      if((m<len_acids)and(m!=n)) {
+//        omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
+//      }
+//      if(distmod[n][m]<2*rcut) {
+//         for( unsigned int k=n+1;k<len_acids;k++) {
+//           omp_deriv_dist[m] += distmod[k][n] 
+//                    * ( charge[k] * dfunc_delta[n][m] 
+//                    +   charge[n] * dfunc_delta[k][m] ); 
+//         }
+//      }
+//   }
+//}
+double thr=0.00000000000001;
+double chargep;
 #pragma omp parallel for
-for(unsigned int m=0;m<len_acids_hyd;m++) {
-   for( unsigned int n=0;n<len_acids;n++) {
-      if((m<len_acids)and(m!=n)) {
-        omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
-      }
-      if(distmod[n][m]<2*rcut) {
-         for( unsigned int k=n+1;k<len_acids;k++) {
-           omp_deriv_dist[m] += distmod[k][n] 
-                    * ( charge[k] * dfunc_delta[n][m] 
-                    +   charge[n] * dfunc_delta[k][m] ); 
+for(unsigned int m=0;m<len_acids;m++) {
+   for( unsigned int n=m+1;n<len_acids;n++) {
+      chargep=charge[m] * charge[n];
+      omp_deriv_dist[m] += chargep * dist[m][n]/distmod[m][n];
+      omp_deriv_dist[n] -= chargep * dist[m][n]/distmod[m][n];
+      if(chargep*chargep>thr) {
+         for( unsigned int k=0;k<len_acids_hyd;k++) {
+           omp_deriv_dist[k] += distmod[m][n] 
+                    * ( charge[m] * dfunc_delta[n][k] 
+                    +   charge[n] * dfunc_delta[m][k] ); 
          }
       }
    }
