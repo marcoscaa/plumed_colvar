@@ -247,20 +247,20 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 }
 
  //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
- vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
-
-#pragma omp parallel for
- for(unsigned int i=0;i<len_acids;i++) {
-   for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-
-     dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
-     for(unsigned int n=i+1;n<len_acids;n++) {
-
-       dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
-       dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
-     }
-   }
- }
+// vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
+//
+//#pragma omp parallel for
+// for(unsigned int i=0;i<len_acids;i++) {
+//   for(unsigned int j=len_acids;j<len_acids_hyd;j++){
+//
+//     dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
+//     for(unsigned int n=i+1;n<len_acids;n++) {
+//
+//       dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
+//       dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
+//     }
+//   }
+// }
 
  std::vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
  std::vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
@@ -275,16 +275,22 @@ for(unsigned i=0;i<len_acids;i++) {
 }
 
 //cout << "Tag 2 " << endl;
+double dfunc_coord;
+double rcut=3;
 
-#pragma omp parallel for
+#pragma omp parallel for private(dfunc_coord)
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-     for(unsigned int k=0;k<len_acids;k++) {
-     
-       ompdfunc_delta[i][k] += dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
-       ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
-
-     }       
+     if(distmod[i][j]<rcut) {
+        for(unsigned int k=0;k<len_acids;k++) {
+          dfunc_coord = -lambda *  c[k][j] * c[i][j];
+          ompdfunc_delta[i][k] += dfunc_coord * dist[k][j]/distmod[k][j];
+          ompdfunc_delta[i][j] -= dfunc_coord * dist[k][j]/distmod[k][j];
+        }       
+        dfunc_coord = lambda *  c[i][j];
+        ompdfunc_delta[i][i] += dfunc_coord * dist[i][j]/distmod[i][j];
+        ompdfunc_delta[i][j] -= dfunc_coord * dist[i][j]/distmod[i][j];
+     }
    }
  }
 
