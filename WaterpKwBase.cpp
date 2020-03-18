@@ -233,6 +233,7 @@ for(unsigned int i=0;i<len_acids;i++) {
      }
      distmod[i][j] = dist[i][j].modulo();
   }
+  distmod[i][i]=0.;
 }
 
 tf = clock();
@@ -274,6 +275,7 @@ cout << "03 c_ij compute: "  << fixed << setprecision(5) << total_time << endl;
 
  //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
  vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
+ //MCA: we should initialize it to zero
 
 t0 = clock();
 
@@ -281,11 +283,13 @@ t0 = clock();
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
 
-     dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
-     for(unsigned int n=i+1;n<len_acids;n++) {
+     if (distmod[i][j]<rcut) { //MCA: rcut
+        dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
+        for(unsigned int n=i+1;n<len_acids;n++) {
 
-       dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
-       dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
+          dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
+          dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
+        }
      }
    }
  }
@@ -319,12 +323,14 @@ t0 = clock();
 #pragma omp parallel for
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-     for(unsigned int k=0;k<len_acids;k++) {
-     
-       ompdfunc_delta[i][k] += dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
-       ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
+     if (distmod[i][j]<rcut) { //MCA: rcut
+       for(unsigned int k=0;k<len_acids;k++) {
+       
+         ompdfunc_delta[i][k] += dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
+         ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
 
-     }       
+       }       
+     }
    }
  }
 
@@ -404,16 +410,23 @@ t0 = clock();
 //cout << "Tag 7 " << endl;
 
 //MCA: deriv_distatives for the IonDistance CV
+double thr=0.0001;
 #pragma omp parallel for
 for(unsigned int m=0;m<len_acids_hyd;m++) {
    for( unsigned int n=0;n<len_acids;n++) {
       if((m<len_acids)and(m!=n)) {
         omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
       }
-      for( unsigned int k=n+1;k<len_acids;k++) {
-        omp_deriv_dist[m] += distmod[k][n] 
-                 * ( charge[k] * dfunc_delta[n][m] 
-                 +   charge[n] * dfunc_delta[k][m] ); 
+      //for( unsigned int k=n+1;k<len_acids;k++) {
+      //  omp_deriv_dist[m] += distmod[k][n] 
+      //                    * charge[k] * dfunc_delta[n][m]; 
+      //}
+      //if (charge[n]>thr) {
+      if (distmod[n][m]<2*rcut) {
+         for( unsigned int k=1;k<len_acids;k++) {
+           omp_deriv_dist[m] += distmod[k][n] 
+                             * charge[n] * dfunc_delta[k][m]; 
+         }
       }
    }
 }
