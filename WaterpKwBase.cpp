@@ -280,35 +280,6 @@ total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
 cout << "03 c_ij compute: "  << fixed << setprecision(5) << total_time << endl;
 
 t0 = clock();
- //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
- //vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
- //MCA: we should initialize it to zero
-tf = clock();
-total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
-cout << "03 dfunc_coord allocation: "  << fixed << setprecision(5) << total_time << endl;
-
-t0 = clock();
-
-//#pragma omp parallel for
-// for(unsigned int i=0;i<len_acids;i++) {
-//   for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-//
-//     if (distmod[i][j]<rcut) { //MCA: rcut
-//        dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
-//        for(unsigned int n=i+1;n<len_acids;n++) {
-//
-//          dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
-//          dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
-//        }
-//     }
-//   }
-// }
-
-tf = clock();
-total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
-cout << "04 dfun_coord compute: "  << fixed << setprecision(5) << total_time << endl;
-
-t0 = clock();
 
  std::vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
  std::vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
@@ -333,26 +304,23 @@ total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
 cout << "05 dfun_delta compute: "  << fixed << setprecision(5) << total_time << endl;
 
 //cout << "Tag 2 " << endl;
+double dfunc_coord;
+double rcut=3;
 
 t0 = clock();
-std::vector<double> dfunc_coord(len_acids);
 
-#pragma omp parallel for
+#pragma omp parallel for private(dfunc_coord)
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-     if (distmod[i][j]<rcut) { //MCA: rcut
-       dfunc_coord[i] = lambda *  c[i][j] * (1 - c[i][j]);
-       for(unsigned int k=i+1;k<len_acids;k++) {
-
-         dfunc_coord[k] = -lambda *  c[k][j] * c[i][j];
-         dfunc_coord[i] = dfunc_coord[k];
-       }
-       for(unsigned int k=0;k<len_acids;k++) {
-       
-         ompdfunc_delta[i][k] += dfunc_coord[k] * dist[k][j]/distmod[k][j];
-         ompdfunc_delta[i][j] -= dfunc_coord[k] * dist[k][j]/distmod[k][j];
-
-       }       
+     if(distmod[i][j]<rcut) {
+        for(unsigned int k=0;k<len_acids;k++) {
+          dfunc_coord = -lambda *  c[k][j] * c[i][j];
+          ompdfunc_delta[i][k] += dfunc_coord * dist[k][j]/distmod[k][j];
+          ompdfunc_delta[i][j] -= dfunc_coord * dist[k][j]/distmod[k][j];
+        }       
+        dfunc_coord = lambda *  c[i][j];
+        ompdfunc_delta[i][i] += dfunc_coord * dist[i][j]/distmod[i][j];
+        ompdfunc_delta[i][j] -= dfunc_coord * dist[i][j]/distmod[i][j];
      }
    }
  }
@@ -440,15 +408,10 @@ for(unsigned int m=0;m<len_acids_hyd;m++) {
       if((m<len_acids)and(m!=n)) {
         omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
       }
-      //for( unsigned int k=n+1;k<len_acids;k++) {
-      //  omp_deriv_dist[m] += distmod[k][n] 
-      //                    * charge[k] * dfunc_delta[n][m]; 
-      //}
-      //if (charge[n]>thr) {
-      if (distmod[n][m]<2*rcut) {
-         for( unsigned int k=1;k<len_acids;k++) {
+      if(distmod[n][m]<rcut) {
+         for( unsigned int k=0;k<len_acids;k++) {
            omp_deriv_dist[m] += distmod[k][n] 
-                             * charge[n] * dfunc_delta[k][m]; 
+                    * charge[k] * dfunc_delta[n][m]; 
          }
       }
    }
