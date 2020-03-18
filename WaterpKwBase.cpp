@@ -152,6 +152,12 @@ void WaterpKwBase::prepare(){
 void WaterpKwBase::calculate()
 {
 
+ //MCA: clock stuff
+ clock_t t0,tf;
+ double total_time;
+
+t0 = clock();
+
  //cout << "Tag -2 ###########################";
  //The 2 scalar CVs
  double IonDistance=0.0;
@@ -207,9 +213,9 @@ if(nt==0)nt=1;
  std::vector<double> d;
  d.insert(d.end(),list_a.size(),d0);
 
- //MCA: clock stuff
- clock_t t0,tf;
- double total_time;
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "00 Initial allocation: "  << fixed << setprecision(5) << total_time << endl;
 
 t0 = clock();
 
@@ -273,33 +279,43 @@ tf = clock();
 total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
 cout << "03 c_ij compute: "  << fixed << setprecision(5) << total_time << endl;
 
+t0 = clock();
  //MCA: double check this vector assignment. It was (len_acids_hyd)**3 before 
- vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
+ //vector<vector<vector<double> > > dfunc_coord(len_acids, vector<vector<double> >(len_acids_hyd, vector<double>(len_acids)));
  //MCA: we should initialize it to zero
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "03 dfunc_coord allocation: "  << fixed << setprecision(5) << total_time << endl;
 
 t0 = clock();
 
-#pragma omp parallel for
- for(unsigned int i=0;i<len_acids;i++) {
-   for(unsigned int j=len_acids;j<len_acids_hyd;j++){
-
-     if (distmod[i][j]<rcut) { //MCA: rcut
-        dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
-        for(unsigned int n=i+1;n<len_acids;n++) {
-
-          dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
-          dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
-        }
-     }
-   }
- }
+//#pragma omp parallel for
+// for(unsigned int i=0;i<len_acids;i++) {
+//   for(unsigned int j=len_acids;j<len_acids_hyd;j++){
+//
+//     if (distmod[i][j]<rcut) { //MCA: rcut
+//        dfunc_coord[i][j][i] = lambda *  c[i][j] * (1 - c[i][j]);
+//        for(unsigned int n=i+1;n<len_acids;n++) {
+//
+//          dfunc_coord[i][j][n] = -lambda *  c[n][j] * c[i][j];
+//          dfunc_coord[n][j][i] = dfunc_coord[i][j][n];
+//        }
+//     }
+//   }
+// }
 
 tf = clock();
 total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
 cout << "04 dfun_coord compute: "  << fixed << setprecision(5) << total_time << endl;
 
+t0 = clock();
+
  std::vector<vector<Vector>> ompdfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
  std::vector<vector<Vector>> dfunc_delta(len_acids, vector<Vector>(len_acids_hyd));
+
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "04 dfunc_delta allocation: "  << fixed << setprecision(5) << total_time << endl;
 
 //cout << "Tag 1 " << dist[0][0].modulo() << endl;
 
@@ -319,15 +335,22 @@ cout << "05 dfun_delta compute: "  << fixed << setprecision(5) << total_time << 
 //cout << "Tag 2 " << endl;
 
 t0 = clock();
+std::vector<double> dfunc_coord(len_acids);
 
 #pragma omp parallel for
  for(unsigned int i=0;i<len_acids;i++) {
    for(unsigned int j=len_acids;j<len_acids_hyd;j++){
      if (distmod[i][j]<rcut) { //MCA: rcut
+       dfunc_coord[i] = lambda *  c[i][j] * (1 - c[i][j]);
+       for(unsigned int k=i+1;k<len_acids;k++) {
+
+         dfunc_coord[k] = -lambda *  c[k][j] * c[i][j];
+         dfunc_coord[i] = dfunc_coord[k];
+       }
        for(unsigned int k=0;k<len_acids;k++) {
        
-         ompdfunc_delta[i][k] += dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
-         ompdfunc_delta[i][j] -= dfunc_coord[i][j][k] * dist[k][j]/distmod[k][j];
+         ompdfunc_delta[i][k] += dfunc_coord[k] * dist[k][j]/distmod[k][j];
+         ompdfunc_delta[i][j] -= dfunc_coord[k] * dist[k][j]/distmod[k][j];
 
        }       
      }
@@ -443,10 +466,6 @@ for(unsigned i=0;i<len_acids_hyd;i++) deriv_dist[i]+=omp_deriv_dist[i];
 #pragma omp critical
 for(unsigned i=0;i<len_acids_hyd;i++) deriv_tc[i]+=omp_deriv_tc[i];
 
-tf = clock();
-total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
-cout << "12 critical compute: "  << fixed << setprecision(5) << total_time << endl;
-
  Value* vsd=getPntrToComponent("sd");
  Value* vtc=getPntrToComponent("tc");
 
@@ -459,6 +478,11 @@ cout << "12 critical compute: "  << fixed << setprecision(5) << total_time << en
  //setValue           (vsd,IonDistance);
  vtc->set(TotalCharge);
  //setBoxDerivatives  (vsd,virial_dist);
+ //
+tf = clock();
+total_time = double(tf-t0)/double(CLOCKS_PER_SEC);
+cout << "12 critical compute: "  << fixed << setprecision(5) << total_time << endl;
+
  
  }
 }
