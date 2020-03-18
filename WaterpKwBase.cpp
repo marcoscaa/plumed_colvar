@@ -349,10 +349,12 @@ for(unsigned int m=0;m<len_acids_hyd;m++) {
       if((m<len_acids)and(m!=n)) {
         omp_deriv_dist[m] += charge[m] * charge[n] * dist[m][n]/distmod[m][n];
       }
-      for( unsigned int k=n+1;k<len_acids;k++) {
-        omp_deriv_dist[m] += distmod[k][n] 
-                 * ( charge[k] * dfunc_delta[n][m] 
-                 +   charge[n] * dfunc_delta[k][m] ); 
+      if(distmod[n][m]<2*rcut) {
+         for( unsigned int k=n+1;k<len_acids;k++) {
+           omp_deriv_dist[m] += distmod[k][n] 
+                    * ( charge[k] * dfunc_delta[n][m] 
+                    +   charge[n] * dfunc_delta[k][m] ); 
+         }
       }
    }
 }
