@@ -249,9 +249,12 @@ for(unsigned int i=0;i<len_acids;i++) {
 //t0 = clock();
 
 for(unsigned int j=len_acids;j<len_acids_hyd;j++) {   
+   double sum_tmp = 0.0;
+   #pragma omp parallel for reduction(+:sum_tmp)
    for(unsigned int i=0;i<len_acids;i++) {   
-      sum_exp[j] += exp(lambda * distmod[i][j]);
+      sum_tmp += exp(lambda * distmod[i][j]);
    }
+   sum_exp[j] = sum_tmp;
 }
 
 //tf = clock();
@@ -292,6 +295,7 @@ for(unsigned int j=len_acids;j<len_acids_hyd;j++) {
 //
 //t0 = clock();
 
+#pragma omp parallel for 
 for(unsigned i=0;i<len_acids;i++) {
   for(unsigned j=0;j<len_acids_hyd;j++) {
     dfunc_delta[i][j]=zeros;
