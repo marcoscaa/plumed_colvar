@@ -48,7 +48,9 @@ void ProtonDefectBase::registerKeywords( Keywords& keys ){
   keys.add("atoms","GROUPB","List of Hydrogen Atoms");
   keys.add("compulsory","LAMBDA","1","The lambda parameter of the sum_exp function; 0 implies 1");
   keys.add("compulsory","D_0","0.0","The d_0 parameter of the switching function");
-  keys.addOutputComponent("pos","default","Coordinates of the proton defect");
+  keys.addOutputComponent("posX","default","X coordinate of the proton defect");
+  keys.addOutputComponent("posY","default","Y coordinate of the proton defect");
+  keys.addOutputComponent("posZ","default","Z coordinate of the proton defect");
   keys.addOutputComponent("tc","default","Total charge order parameter");
 }
 
@@ -93,7 +95,9 @@ firsttime(true)
   }
   
   //TODO: add neighbor list for gc_lista
-  addComponentWithDerivatives("pos"); componentIsNotPeriodic("pos");
+  addComponentWithDerivatives("posX"); componentIsNotPeriodic("posX");
+  addComponentWithDerivatives("posY"); componentIsNotPeriodic("posY");
+  addComponentWithDerivatives("posZ"); componentIsNotPeriodic("posZ");
   addComponentWithDerivatives("tc"); componentIsNotPeriodic("tc");
   if(gb_lista.size()>0){
     if(doneigh)  nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc(),nl_cut,nl_st);
@@ -158,7 +162,7 @@ void ProtonDefectBase::calculate()
 
  //cout << "Tag -2 ###########################";
  //The 2 scalar CVs
- double IonPosition=0.0;
+ Vector IonPosition={0.0,0.0,0.0};
  double TotalCharge=0.0;
  //Length of acids groups, with and without the H atoms
  unsigned len_acids = list_a.size();
@@ -203,6 +207,7 @@ if(nt==0)nt=1;
  //Matrix<double> dist(len_acids_hyd,len_acids_hyd);
  //std::vector<std::vector<Vector>> dist;
  vector<vector<Vector>> dist(len_acids, vector<Vector>(len_acids_hyd));
+ std::vector<Vector> position(len_acids);
  Matrix<double> distmod(len_acids,len_acids_hyd);
  vector<double> coord(len_acids);
  vector<double> charge(len_acids);
@@ -220,6 +225,11 @@ if(nt==0)nt=1;
 
 #pragma omp parallel for
 for(unsigned int i=0;i<len_acids;i++) {   
+     if(pbc){
+        position[i]=pbcDistance(Vector(0,0,0),getPosition(i));
+     } else {
+        position[i]=delta(Vector(0,0,0),getPosition(i));
+     }
   for(unsigned int j=i+1;j<len_acids;j++) {   
      if(pbc){
         dist[i][j]=pbcDistance(getPosition(i),getPosition(j));
@@ -377,7 +387,7 @@ TotalCharge -= len_acids * sqrt(alpha);
 //MCA: Adding the Position CV here
 #pragma omp parallel for reduction(+:IonPosition)
  for(unsigned int i=0;i<len_acids;i++) {
-   IonPosition = getPosition(i) * charge[i];
+   for(unsigned int j=0;j<3;j++) IonPosition[j] += position[i][j] * charge[i];
  }
 
 //tf = clock();
@@ -405,12 +415,13 @@ TotalCharge -= len_acids * sqrt(alpha);
 //MCA: derivatives for the IonPosition CV
 #pragma omp parallel for
 for(unsigned int m=0;m<len_acids_hyd;m++) {
-   if(m<len_acids) {
-     omp_deriv_pos[m] = charge[m];
-   }
-   for( unsigned int n=0;n<len_acids;n++) {
-      omp_deriv_pos[m] += getPosition(n) * dfunc_delta[n][m]; 
+   for(unsigned int k=0;k<3;k++) {
+      if(m<len_acids) {
+        omp_deriv_pos[m][k] = charge[m];
       }
+      for( unsigned int n=0;n<len_acids;n++) {
+         omp_deriv_pos[m][k] += position[n][k] * dfunc_delta[n][m][k]; 
+         }
    }
 }
 
@@ -426,12 +437,25 @@ for(unsigned i=0;i<len_acids_hyd;i++) deriv_pos[i]+=omp_deriv_pos[i];
 #pragma omp critical
 for(unsigned i=0;i<len_acids_hyd;i++) deriv_tc[i]+=omp_deriv_tc[i];
 
- Value* vsd=getPntrToComponent("sd");
+ Value* vsdX=getPntrToComponent("posX");
+ Value* vsdY=getPntrToComponent("posY");
+ Value* vsdZ=getPntrToComponent("posZ");
  Value* vtc=getPntrToComponent("tc");
 
- for(unsigned i=0;i<deriv_pos.size();++i) setAtomsDerivatives(vsd,i,deriv_pos[i]);
+ // Define unit vectos
+ Vector ux={1.0,0.0,0.0};
+ Vector uy={0.0,1.0,0.0};
+ Vector uz={0.0,0.0,1.0};
+
+ for(unsigned i=0;i<deriv_pos.size();++i){ 
+     setAtomsDerivatives(vsdX,i,deriv_pos[i][0]*ux);
+     setAtomsDerivatives(vsdY,i,deriv_pos[i][1]*uy);
+     setAtomsDerivatives(vsdZ,i,deriv_pos[i][2]*uz);
+ }
  //setValue           (vsd,IonPosition);
- vsd->set(IonPosition);
+ vsdX->set(IonPosition[0]);
+ vsdY->set(IonPosition[1]);
+ vsdZ->set(IonPosition[2]);
  //setBoxDerivatives  (vsd,virial_dist);
  
  for(unsigned i=0;i<deriv_tc.size();++i) setAtomsDerivatives(vtc,i,deriv_tc[i]);

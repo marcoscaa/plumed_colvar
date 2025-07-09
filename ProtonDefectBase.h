@@ -37,7 +37,7 @@ class ProtonDefectBase : public Colvar {
   std::vector<PLMD::AtomNumber> atomsToRequest;
   bool invalidateList;
   bool firsttime;
-  int  pn, qn, pq, qq, lambda;
+  int  lambda;
   double r0, d0, sum_exp; //MCA: added d2
   
 public:
