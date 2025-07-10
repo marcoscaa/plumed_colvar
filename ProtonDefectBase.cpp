@@ -95,9 +95,9 @@ firsttime(true)
   }
   
   //TODO: add neighbor list for gc_lista
-  addComponentWithDerivatives("posX"); componentIsNotPeriodic("posX");
-  addComponentWithDerivatives("posY"); componentIsNotPeriodic("posY");
-  addComponentWithDerivatives("posZ"); componentIsNotPeriodic("posZ");
+  addComponentWithDerivatives("posX"); componentIsPeriodic("posX","-0.5","+0.5");
+  addComponentWithDerivatives("posY"); componentIsPeriodic("posY","-0.5","+0.5");
+  addComponentWithDerivatives("posZ"); componentIsPeriodic("posZ","-0.5","+0.5");
   addComponentWithDerivatives("tc"); componentIsNotPeriodic("tc");
   if(gb_lista.size()>0){
     if(doneigh)  nl= new NeighborList(ga_lista,gb_lista,dopair,pbc,getPbc(),nl_cut,nl_st);
@@ -177,11 +177,10 @@ void ProtonDefectBase::calculate()
 
  Tensor virial;
  Tensor virial_dist; //MCA: IonPosition CV
- std::vector<Vector> deriv_pos(len_acids_hyd);
+ std::vector<vector<Vector>> deriv_pos(len_acids_hyd,vector<Vector>(3));
  std::vector<Vector> deriv_tc(len_acids_hyd);
  Vector zeros;
  zeros.zero();
- fill(deriv_pos.begin(), deriv_pos.end(), zeros);
  fill(deriv_tc.begin(), deriv_tc.end(), zeros);
 
  if(nl->getStride()>0 && invalidateList){
@@ -197,11 +196,18 @@ if(nt==0)nt=1;
 
 //cout << "Tag -1 " << endl;
 
- std::vector<Vector> omp_deriv_pos(len_acids_hyd);
+ std::vector<vector<Vector>> omp_deriv_pos(len_acids_hyd,vector<Vector>(3));
  std::vector<Vector> omp_deriv_tc(len_acids_hyd);
- fill(omp_deriv_pos.begin(), omp_deriv_pos.end(), zeros);
  fill(omp_deriv_tc.begin(), omp_deriv_tc.end(), zeros);
  Tensor omp_virial;
+ 
+ //Initializing derivative arrays to zero
+ for(unsigned int m=0;m<len_acids_hyd;m++) {
+    for(unsigned int k=0;k<3;k++) {
+        omp_deriv_pos[m][k] = zeros;
+        deriv_pos[m][k] = zeros;
+    }
+ }
 
  Matrix<double> c(len_acids_hyd,len_acids_hyd);
  //Matrix<double> dist(len_acids_hyd,len_acids_hyd);
@@ -387,7 +393,7 @@ TotalCharge -= len_acids * sqrt(alpha);
 //MCA: Adding the Position CV here
 #pragma omp parallel for reduction(+:IonPosition)
  for(unsigned int i=0;i<len_acids;i++) {
-   cout << position[i] << ", " << charge[i] << endl;
+   //cout << position[i] << ", " << charge[i] << endl;
    for(unsigned int j=0;j<3;j++) IonPosition[j] += position[i][j] * charge[i];
  }
 
@@ -417,12 +423,14 @@ TotalCharge -= len_acids * sqrt(alpha);
 #pragma omp parallel for
 for(unsigned int m=0;m<len_acids_hyd;m++) {
    for(unsigned int k=0;k<3;k++) {
-      if(m<len_acids) {
-        omp_deriv_pos[m][k] = charge[m];
-      }
-      for( unsigned int n=0;n<len_acids;n++) {
-         omp_deriv_pos[m][k] += position[n][k] * dfunc_delta[n][m][k]; 
+      for(unsigned int l=0;l<3;l++) {
+         if((m<len_acids)and(k==l)) {
+           omp_deriv_pos[m][k][k] = charge[m];
          }
+         for( unsigned int n=0;n<len_acids;n++) {
+            omp_deriv_pos[m][k][l] += position[n][l] * dfunc_delta[n][m][k]; 
+         }
+      }
    }
 }
 
@@ -434,7 +442,11 @@ for(unsigned int m=0;m<len_acids_hyd;m++) {
 //t0 = clock();
 
 #pragma omp critical
-for(unsigned i=0;i<len_acids_hyd;i++) deriv_pos[i]+=omp_deriv_pos[i];
+for(unsigned i=0;i<len_acids_hyd;i++) {
+    for(unsigned j=0;j<3;j++) { 
+        deriv_pos[i][j]+=omp_deriv_pos[i][j];
+    }
+}
 #pragma omp critical
 for(unsigned i=0;i<len_acids_hyd;i++) deriv_tc[i]+=omp_deriv_tc[i];
 
@@ -443,15 +455,10 @@ for(unsigned i=0;i<len_acids_hyd;i++) deriv_tc[i]+=omp_deriv_tc[i];
  Value* vsdZ=getPntrToComponent("posZ");
  Value* vtc=getPntrToComponent("tc");
 
- // Define unit vectos
- Vector ux={1.0,0.0,0.0};
- Vector uy={0.0,1.0,0.0};
- Vector uz={0.0,0.0,1.0};
-
  for(unsigned i=0;i<deriv_pos.size();++i){ 
-     setAtomsDerivatives(vsdX,i,deriv_pos[i][0]*ux);
-     setAtomsDerivatives(vsdY,i,deriv_pos[i][1]*uy);
-     setAtomsDerivatives(vsdZ,i,deriv_pos[i][2]*uz);
+     setAtomsDerivatives(vsdX,i,matmul(getPbc().getInvBox(),deriv_pos[i][0]));
+     setAtomsDerivatives(vsdY,i,matmul(getPbc().getInvBox(),deriv_pos[i][1]));
+     setAtomsDerivatives(vsdZ,i,matmul(getPbc().getInvBox(),deriv_pos[i][2]));
  }
  //setValue           (vsd,IonPosition);
  Vector sip=getPbc().realToScaled(IonPosition);
