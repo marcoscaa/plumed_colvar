@@ -387,6 +387,7 @@ TotalCharge -= len_acids * sqrt(alpha);
 //MCA: Adding the Position CV here
 #pragma omp parallel for reduction(+:IonPosition)
  for(unsigned int i=0;i<len_acids;i++) {
+   cout << position[i] << ", " << charge[i] << endl;
    for(unsigned int j=0;j<3;j++) IonPosition[j] += position[i][j] * charge[i];
  }
 
@@ -453,9 +454,10 @@ for(unsigned i=0;i<len_acids_hyd;i++) deriv_tc[i]+=omp_deriv_tc[i];
      setAtomsDerivatives(vsdZ,i,deriv_pos[i][2]*uz);
  }
  //setValue           (vsd,IonPosition);
- vsdX->set(IonPosition[0]);
- vsdY->set(IonPosition[1]);
- vsdZ->set(IonPosition[2]);
+ Vector sip=getPbc().realToScaled(IonPosition);
+ vsdX->set(Tools::pbc(sip[0]));
+ vsdY->set(Tools::pbc(sip[1]));
+ vsdZ->set(Tools::pbc(sip[2]));
  //setBoxDerivatives  (vsd,virial_dist);
  
  for(unsigned i=0;i<deriv_tc.size();++i) setAtomsDerivatives(vtc,i,deriv_tc[i]);
