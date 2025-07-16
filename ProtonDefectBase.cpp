@@ -391,7 +391,7 @@ TotalCharge -= len_acids * sqrt(alpha);
 //t0 = clock();
 
 //MCA: Adding the Position CV here
-#pragma omp parallel for reduction(+:IonPosition)
+//#pragma omp parallel for reduction(+:IonPosition)
  for(unsigned int i=0;i<len_acids;i++) {
    //cout << position[i] << ", " << charge[i] << endl;
    for(unsigned int j=0;j<3;j++) IonPosition[j] += position[i][j] * charge[i];
@@ -428,7 +428,7 @@ for(unsigned int m=0;m<len_acids_hyd;m++) {
            omp_deriv_pos[m][k][k] = charge[m];
          }
          for( unsigned int n=0;n<len_acids;n++) {
-            omp_deriv_pos[m][k][l] += position[n][l] * dfunc_delta[n][m][k]; 
+            omp_deriv_pos[m][k][l] += position[n][k] * dfunc_delta[n][m][l]; 
          }
       }
    }
